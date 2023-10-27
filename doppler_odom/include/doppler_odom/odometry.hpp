@@ -30,6 +30,7 @@ class Odometry {
 
     // integration
     int integration_steps = 100;
+    double zero_vel_tol = 0.03;
 
     // inverse covariances
     Eigen::Matrix<double, 6, 6> Qkinv = Eigen::Matrix<double, 6, 6>::Identity(); 
@@ -49,7 +50,7 @@ class Odometry {
   virtual ~Odometry() = default;
 
   // register new frame for odometry
-  virtual bool registerFrame(const std::vector<Pointcloud> &frame, const std::vector<Eigen::MatrixXd> &gyro) = 0;
+  virtual void registerFrame(const std::vector<Pointcloud> &frame, const std::vector<Eigen::MatrixXd> &gyro) = 0;
   virtual std::vector<Pointcloud> preprocessFrame(std::vector<Pointcloud> &frame, const double& start_time, const double& end_time) = 0;
   virtual std::vector<Pointcloud> ransacFrame(const std::vector<Pointcloud> &frame) = 0;
   virtual Eigen::Matrix4d integrateForPose() = 0;

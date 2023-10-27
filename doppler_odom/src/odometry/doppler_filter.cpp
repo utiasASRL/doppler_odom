@@ -74,7 +74,6 @@ std::vector<Pointcloud> DopplerFilter::preprocessFrame(std::vector<Pointcloud> &
   trajectory_.emplace_back();
 
   // timestamps
-  // initializeTimestamp(index_frame, frames);
   trajectory_[index_frame].begin_timestamp = start_time;
   trajectory_[index_frame].end_timestamp = end_time;
   LOG(INFO) << trajectory_.back().begin_timestamp << ", " <<  trajectory_.back().end_timestamp << std::endl;
@@ -268,7 +267,7 @@ std::vector<Pointcloud> DopplerFilter::ransacFrame(const std::vector<Pointcloud>
   return inlier_frames;
 }
 
-bool DopplerFilter::registerFrame(const std::vector<Pointcloud> &const_frames, const std::vector<Eigen::MatrixXd> &gyro) {
+void DopplerFilter::registerFrame(const std::vector<Pointcloud> &const_frames, const std::vector<Eigen::MatrixXd> &gyro) {
   Eigen::Matrix<double, 12, 12> lhs = Eigen::Matrix<double, 12, 12>::Zero();
   Eigen::Matrix<double, 12, 1> rhs = Eigen::Matrix<double, 12, 1>::Zero();
 
@@ -304,7 +303,7 @@ bool DopplerFilter::registerFrame(const std::vector<Pointcloud> &const_frames, c
       Ggyro.rightCols<6>() = alpha*Cgyro;
 
       lhs += Ggyro.transpose() * gyro_invcov_[i] * Ggyro;
-      rhs += Ggyro.transpose() * gyro_invcov_[i] * gyro[i].row(j).rightCols<3>().transpose();
+      rhs += Ggyro.transpose() * gyro_invcov_[i] * (gyro[i].row(j).rightCols<3>().transpose() - options_.const_gyro_bias[i]);
     }
   } // end for i
 
@@ -332,10 +331,8 @@ bool DopplerFilter::registerFrame(const std::vector<Pointcloud> &const_frames, c
   trajectory_.back().varpi = lhs_new.inverse() * rhs_new;
   last_lhs_ = lhs_new;
   last_rhs_ = rhs_new;
-  // std::cout << trajectory_.back().varpi.transpose() << std::endl;
 
-  // TODO: need to check if matrix is invertible, although we don't ever hit this situation with all our data so far
-  return true; // dummy return
+  return;
 }
 
 void DopplerFilter::initializeTimestamp(int index_frame, const std::vector<Pointcloud> &const_frames) {
@@ -362,17 +359,15 @@ Eigen::Matrix4d DopplerFilter::integrateForPose() {
   Eigen::Matrix<double,6,1> knot2 = trajectory_.back().varpi;
 
   // mask to zero when stationary
-  // TODO: set 0.03 as parameter
-  if (std::fabs(knot1(0)) < 0.03)
+  if (std::fabs(knot1(0)) < options_.zero_vel_tol)
     knot1 = Eigen::Matrix<double,6,1>::Zero();
-  if (std::fabs(knot2(0)) < 0.03)
+  if (std::fabs(knot2(0)) < options_.zero_vel_tol)
     knot2 = Eigen::Matrix<double,6,1>::Zero();
 
   // integrate between the knots
-  int steps = 100; // TODO: set as parameter
-  double dtt = dt/static_cast<double>(steps);
+  double dtt = dt/static_cast<double>(options_.integration_steps);
   Eigen::Matrix4d T_21 = Eigen::Matrix4d::Identity();
-  for (int s = 1; s <= steps; ++s) {
+  for (int s = 1; s <= options_.integration_steps; ++s) {
     double t = s*dtt;
     double alpha = t/dt;
     Eigen::Matrix<double,6,1> vinterp = (1.0-alpha)*knot1 + alpha*knot2;

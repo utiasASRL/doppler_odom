@@ -68,6 +68,7 @@ doppler_odom::OdomOptions loadOptions(const YAML::Node& config) {
   odometry_options.ransac_max_iter = config["odometry_options"]["ransac_max_iter"].as<int>();
   odometry_options.ransac_thres = config["odometry_options"]["ransac_thres"].as<double>();
   odometry_options.integration_steps = config["odometry_options"]["integration_steps"].as<int>();
+  odometry_options.zero_vel_tol = config["odometry_options"]["zero_vel_tol"].as<double>();
 
   odometry_options.min_dist = config["odometry_options"]["min_dist_lidar_center"].as<double>();
   odometry_options.max_dist = config["odometry_options"]["max_dist_lidar_center"].as<double>();
@@ -81,8 +82,15 @@ doppler_odom::OdomOptions loadOptions(const YAML::Node& config) {
   temp = config["odometry_options"]["Qzinv"].as<std::vector<double>>();
   odometry_options.Qzinv.diagonal() = Eigen::Matrix<double,6,1>(temp.data());
 
+  // algorithm-specific parameters
   if (options.odometry == "doppler_filter") {
-    // TODO
+    if (DopplerFilter::Options* dfilter_options = dynamic_cast<DopplerFilter::Options*>(options.odometry_options.get())) {
+      // gyro bias (1 for each sensor)
+      auto temp_vec = config["odometry_options"]["const_gyro_bias"].as<std::vector<std::vector<double>>>();
+      dfilter_options->const_gyro_bias.clear();
+      for (auto& bias: temp_vec)
+        dfilter_options->const_gyro_bias.push_back(Eigen::Vector3d(bias.data()));
+    }
   }
 
   return options;
@@ -144,7 +152,6 @@ int main(int argc, char** argv) {
       // preprocessing step (downsample + regression, ~3.9ms)
       timer[1].second->start();
       const auto preprocessed_frames = odometry->preprocessFrame(frames, start_time, end_time);
-      // odometry->preprocessFrame(frames, start_time, end_time);
       timer[1].second->stop();
 
       // load gyro measurements that overlap with latest lidar frame (~0.1ms, not counted towards time in paper)
@@ -156,12 +163,11 @@ int main(int argc, char** argv) {
       // ransac (~1.1ms)
       timer[3].second->start();
       const auto ransac_frames = odometry->ransacFrame(preprocessed_frames);
-      // const auto ransac_frames = odometry->ransacFrame(frames);
       timer[3].second->stop();
 
       // estimate latest velocity (~0.5ms)
       timer[4].second->start();
-      const auto summary = odometry->registerFrame(ransac_frames, gyro);
+      odometry->registerFrame(ransac_frames, gyro);
       timer[4].second->stop();
 
       // integrate for latest pose (~0.01ms)

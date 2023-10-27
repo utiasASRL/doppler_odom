@@ -28,7 +28,6 @@ class BoreasAevaSequence : public Sequence {
 
   // gyro measurements
   std::vector<Eigen::MatrixXd> gyro_data_;
-  std::vector<Eigen::Vector3d> const_gyro_bias_;  // const gyro bias
 };
 
 class BoreasAevaDataset : public Dataset {

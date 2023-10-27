@@ -10,13 +10,13 @@ class DopplerFilter : public Odometry {
  public:
 
   struct Options : public Odometry::Options {
-    // TODO
+    std::vector<Eigen::Vector3d> const_gyro_bias; // constant gyro bias (1 for each sensor)
   };
 
   DopplerFilter(const Options &options);
   ~DopplerFilter();
 
-  bool registerFrame(const std::vector<Pointcloud> &frame, const std::vector<Eigen::MatrixXd> &gyro) override;
+  void registerFrame(const std::vector<Pointcloud> &frame, const std::vector<Eigen::MatrixXd> &gyro) override;
   std::vector<Pointcloud> preprocessFrame(std::vector<Pointcloud> &frame, const double& start_time, const double& end_time) override;
   std::vector<Pointcloud> ransacFrame(const std::vector<Pointcloud> &frame) override;
   Eigen::Matrix4d integrateForPose() override;

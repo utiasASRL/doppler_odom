@@ -70,10 +70,6 @@ ArrayPoses loadPoses(const std::string &file_path) {
       T_ms.block<3, 3>(0, 0) = rpy2rot(r, p, y).transpose();
 
       (void)timestamp;
-      // LOG(WARNING) << "loaded: " << timestamp << " " << std::fixed << std::setprecision(6)
-      //              << T_ms(0, 3) << " " << T_ms(1, 3) << " " << T_ms(2, 3) << " "
-      //              << r << " " << p << " " << y << " " << std::endl;
-
       poses.push_back(T_ms);
     }
   } else {
@@ -98,8 +94,7 @@ Pointcloud readPointCloud(const std::string &path, const double &time_delta_sec,
 
   double frame_last_timestamp = -1000000.0;
   double frame_first_timestamp = 1000000.0;
-  frame.reserve(numPointsIn); // TODO: # active sensors should be parameter
-  // frames[1].reserve(numPointsIn);
+  frame.reserve(numPointsIn); 
   for (unsigned i(0); i < numPointsIn; i++) {
     Point3D new_point;
 
@@ -110,7 +105,6 @@ Pointcloud readPointCloud(const std::string &path, const double &time_delta_sec,
     new_point.pt[1] = getFloatFromByteArray(buffer.data(), bufpos + offset * float_offset);
     ++offset;
     new_point.pt[2] = getFloatFromByteArray(buffer.data(), bufpos + offset * float_offset);
-    // new_point.pt = new_point.raw_pt;
 
     ++offset;
     // intensity skipped
@@ -122,13 +116,6 @@ Pointcloud readPointCloud(const std::string &path, const double &time_delta_sec,
     ++offset;
     new_point.beam_id = (int)getFloatFromByteArray(buffer.data(), bufpos + offset * float_offset);
 
-    // azimuth and elevation (not recorded, but obtainable from sensor)
-    // new_point.azimuth = atan2(new_point.pt[1], new_point.pt[0]);
-    // double xy = sqrt(new_point.pt[0]*new_point.pt[0] + new_point.pt[1]*new_point.pt[1]);
-    // new_point.elevation = atan2(new_point.pt[2], xy);
-    // new_point.range = sqrt(new_point.pt[0]*new_point.pt[0] + new_point.pt[1]*new_point.pt[1] + new_point.pt[2]*new_point.pt[2]);
-    // new_point.range = new_point.pt.norm();
-
     if (new_point.timestamp < frame_first_timestamp) {
       frame_first_timestamp = new_point.timestamp;
     }
@@ -137,9 +124,6 @@ Pointcloud readPointCloud(const std::string &path, const double &time_delta_sec,
       frame_last_timestamp = new_point.timestamp;
     }
 
-    // if ((new_point.range > min_dist) && (new_point.range < max_dist)) {
-    //   frames[sensorid].push_back(new_point);
-    // }
     frame.push_back(new_point);
   }
   frame.shrink_to_fit();
@@ -171,52 +155,16 @@ BoreasAevaSequence::BoreasAevaSequence(const Options &options) : Sequence(option
   curr_frame_ = std::max((int)0, options_.init_frame);
   init_frame_ = std::max((int)0, options_.init_frame);
   std::sort(filenames_.begin(), filenames_.end(), filecomp);  // custom comparison
-  // for (int i = 0; i < filenames_.size(); ++i)
-  //   std::cout << filenames_[i] << std::endl;
 
   initial_timestamp_micro_ = std::stoll(filenames_[0].substr(0, filenames_[0].find(".")));
 
   // read gyro measurements
-  // TODO: pointcloud and gyro are currently hardcoded to 2
+  // TODO: handle multiple sensors for gyro
   gyro_data_.clear();
-  // for (int i = 0; i < 1; ++i) {
   std::string gyro_path = options_.root_path + "/" + options_.sequence + "/applanix/" + "aeva_imu.csv";
-  // std::ifstream csv(gyro_path);
-  // if (!csv) throw std::ios::failure("Error opening csv file");
-  // gyro_data_.push_back(readCSVtoEigenXd(csv));
   gyro_data_.push_back(readBoreasGyroToEigenXd(gyro_path, initial_timestamp_micro_));
   LOG(INFO) << "Loaded gyro data " << ". Matrix " 
       << gyro_data_.back().rows() << " x " << gyro_data_.back().cols() << std::endl;
-
-  // }
-  Eigen::Vector3d bias;
-
-  // TODO: set as params
-  // seq 1
-  bias << -0.004580390732042348, -0.015914139544965403, 0.002919723147493117;
-  // bias << -0.004589102252958362, -0.015940716283125593, 0.0028986986632402556; // gyro zero dt
-
-  // seq 2
-  // bias << -0.0046753846036908546, -0.015503827088527898, 0.0026901002680172607;
-  // bias << -0.00457202, -0.01604692,  0.00286416; bad
-  // bias << -0.00459815, -0.01507639,  0.00276979;
-
-  // seq 3
-  // bias << -0.004704080387938314, -0.015418016556276004, 0.002929702603269863;
-  // bias << -0.0046590010192844615, -0.015346884378995923, 0.002917551824952687; // gyro zero dt
-
-  // seq 4
-  // bias << -0.0047457703800500226, -0.015510091876839329, 0.0028909703180227397;
-  // bias << -0.00463107, -0.01586458,  0.00283692; bad
-  // [array([-0.004657  , -0.01559036,  0.00289203])]
-
-  // seq 5
-  // bias << -0.004683418528782437, -0.015606584889190697, 0.0028162989131864185;
-  // bias << -0.0046995128497832215, -0.01538410367543168, 0.0028376625481614124;
-
-  const_gyro_bias_.push_back(bias);
-  // bias << 0.00227289,  0.00450419, -0.0044881;
-  // const_gyro_bias_.push_back(bias);
 }
 
 std::vector<Pointcloud> BoreasAevaSequence::next(double& start_time, double& end_time) {
@@ -261,11 +209,9 @@ std::vector<Eigen::MatrixXd> BoreasAevaSequence::next_gyro(const double& start_t
     Eigen::MatrixXd temp_gyro(inds.size(), 4);
     for (int r = 0; r < inds.size(); ++r) {
       temp_gyro(r, 0) = gyro_data_[sensorid](inds[r], 0) - dt; // timestamp
-      temp_gyro.row(r).rightCols<3>() = gyro_data_[sensorid].row(inds[r]).rightCols<3>() - const_gyro_bias_[sensorid].transpose();
-      // temp_gyro.row(r).rightCols<3>() = gyro_data_[sensorid].row(inds[r]).rightCols<3>();
+      temp_gyro.row(r).rightCols<3>() = gyro_data_[sensorid].row(inds[r]).rightCols<3>();
     }
     output.push_back(temp_gyro);
-    // std::cout << "test gyro: " << temp_gyro.row(inds.size() - 1) << std::endl;
     LOG(INFO) << "grabbing gyro " << sensorid << ", " << output.back().rows() << " x " << output.back().cols() 
       << ". Start time: " << output.back()(0, 0) << ", " << "end time: " << output.back()(inds.size()-1, 0) << std::endl;
   } // end for sensorid
