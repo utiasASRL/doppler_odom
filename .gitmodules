@@ -1,0 +1,3 @@
+[submodule "lgmath"]
+	path = lgmath
+	url = https://github.com/utiasASRL/lgmath
