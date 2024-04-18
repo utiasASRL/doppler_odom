@@ -1,6 +1,4 @@
 #include <filesystem>
-namespace fs = std::filesystem;
-
 #include <iostream>
 #include "glog/logging.h"
 #include "yaml-cpp/yaml.h"
@@ -108,7 +106,7 @@ int main(int argc, char** argv) {
   // setup logging
   FLAGS_log_dir = config["log_dir"].as<std::string>();
   FLAGS_alsologtostderr = 1;
-  fs::create_directories(FLAGS_log_dir);
+  std::filesystem::create_directories(FLAGS_log_dir);
   google::InitGoogleLogging(argv[0]);
   LOG(WARNING) << "Logging to " << FLAGS_log_dir;
 

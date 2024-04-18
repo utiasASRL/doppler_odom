@@ -30,9 +30,6 @@ class DopplerFilter : public Odometry {
 
  private:
   void initializeTimestamp(int index_frame, const std::vector<Pointcloud> &const_frame);
-  // void initializeMotion(int index_frame);
-  // std::vector<Point3D> initializeFrame(int index_frame, const std::vector<Point3D> &const_frame);
-
   const Options options_;
 
   // precompute

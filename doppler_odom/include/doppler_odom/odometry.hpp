@@ -120,7 +120,7 @@ struct OdometryRegister {
   }
 };
 
-#define DOPPLER_ODOM_REGISTER_ODOMETRY(NAME, TYPE)       \
+#define DOPPLER_ODOM_REGISTER_ODOMETRY(NAME, TYPE)    \
  public:                                              \
   inline static constexpr auto odometry_name_ = NAME; \
                                                       \

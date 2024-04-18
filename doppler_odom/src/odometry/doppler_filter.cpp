@@ -15,6 +15,7 @@ namespace doppler_odom {
 DopplerFilter::DopplerFilter(const Options &options) : Odometry(options), options_(options) {
 
   // extrinsics
+  // TODO: move to data class and set as parameters
   T_sv_.resize(options_.num_sensors);
   T_sv_[0] << 0.9999366830849237, 0.008341717781538466, 0.0075534496251198685, -1.0119098938516395,
               -0.008341717774127972, 0.9999652112886684, -3.150635091210066e-05, -0.39658824335171944,
@@ -35,7 +36,7 @@ DopplerFilter::DopplerFilter(const Options &options) : Odometry(options), option
   temp.bottomRows<6>() = Eigen::Matrix<double, 6, 6>::Identity();
   wnoa_lhs_ = temp * options_.Qkinv * temp.transpose();
 
-  // TODO: set as parameters
+  // TODO: move to data class and set as parameters
   // gyro noise
   gyro_invcov_.resize(options_.num_sensors);
   gyro_invcov_[0] = Eigen::Matrix3d::Identity();
@@ -204,6 +205,7 @@ Pointcloud DopplerFilter::ransacFrame(const Pointcloud &const_frame) {
 }
 
 void DopplerFilter::solveFrame(const Pointcloud &const_frame, const std::vector<Eigen::MatrixXd> &gyro) {
+  // we build a 12x12 linear system and marginalize to a 6x6 system to solve for the latest vehicle velocity
   Eigen::Matrix<double, 12, 12> lhs = Eigen::Matrix<double, 12, 12>::Zero();
   Eigen::Matrix<double, 12, 1> rhs = Eigen::Matrix<double, 12, 1>::Zero();
 
@@ -244,16 +246,6 @@ void DopplerFilter::solveFrame(const Pointcloud &const_frame, const std::vector<
   } // end for i
 
   // doppler measurements
-  // for (int i = 0; i < options_.num_sensors; ++i) {
-  //   if (!sensor_active_[i])
-  //     continue; // no measurements
-  //   Eigen::Matrix<double, Eigen::Dynamic, 12> G(const_frames[i].size(), 12); // N x 12
-  //   G.leftCols<6>() = ransac_precompute_[i].array().colwise() * malpha_precompute_[i].array();
-  //   G.rightCols<6>() = ransac_precompute_[i].array().colwise() * alpha_precompute_[i].array();
-
-  //   lhs += G.transpose() * G / (0.2*0.2);   // TODO: add variance as parameter
-  //   rhs += G.transpose() * meas_precompute_[i] / (0.2*0.2);
-  // } // end for i
   Eigen::Matrix<double, Eigen::Dynamic, 12> G(const_frame.size(), 12); // N x 12
   G.leftCols<6>() = ransac_precompute_.array().colwise() * malpha_precompute_.array();
   G.rightCols<6>() = ransac_precompute_.array().colwise() * alpha_precompute_.array();
@@ -266,12 +258,11 @@ void DopplerFilter::solveFrame(const Pointcloud &const_frame, const std::vector<
   Eigen::Matrix<double, 6, 1> rhs_new = rhs.tail<6>() - temp*rhs.head<6>();
 
   // solve
-  // trajectory_.back().varpi = lhs_new.inverse() * rhs_new;
   trajectory_.back().varpi = lhs_new.llt().solve(rhs_new);
   last_lhs_ = lhs_new;
   last_rhs_ = rhs_new;
 
-  std::cout << trajectory_.back().varpi.transpose() << std::endl;
+  // std::cout << trajectory_.back().varpi.transpose() << std::endl;
   return;
 }
 
