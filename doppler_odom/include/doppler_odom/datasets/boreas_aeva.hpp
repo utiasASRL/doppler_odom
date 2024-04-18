@@ -11,7 +11,7 @@ class BoreasAevaSequence : public Sequence {
   int currFrame() const override { return curr_frame_; }
   int numFrames() const override { return last_frame_ - init_frame_; }
   bool hasNext() const override { return curr_frame_ < last_frame_; }
-  std::vector<Pointcloud> next(double& start_time, double& end_time) override;
+  Pointcloud next(double& start_time, double& end_time) override;
   std::vector<Eigen::MatrixXd> next_gyro(const double& start_time, const double& end_time) override;
 
   bool hasGroundTruth() const override { return false; }  // TODO

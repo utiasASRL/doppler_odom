@@ -50,9 +50,9 @@ class Odometry {
   virtual ~Odometry() = default;
 
   // register new frame for odometry
-  virtual void registerFrame(const std::vector<Pointcloud> &frame, const std::vector<Eigen::MatrixXd> &gyro) = 0;
-  virtual std::vector<Pointcloud> preprocessFrame(std::vector<Pointcloud> &frame, const double& start_time, const double& end_time) = 0;
-  virtual std::vector<Pointcloud> ransacFrame(const std::vector<Pointcloud> &frame) = 0;
+  virtual void solveFrame(const Pointcloud &frame, const std::vector<Eigen::MatrixXd> &gyro) = 0;
+  virtual Pointcloud preprocessFrame(Pointcloud &frame, const double& start_time, const double& end_time) = 0;
+  virtual Pointcloud ransacFrame(const Pointcloud &frame) = 0;
   virtual Eigen::Matrix4d integrateForPose() = 0;
   virtual std::vector<double> getLatestFrameTimes() = 0;
 
@@ -70,11 +70,11 @@ class Odometry {
 
  protected:
   // precomputed measurement model (to avoid repeated calculations in RANSAC and main solve)
-  std::vector<Eigen::Matrix<double,Eigen::Dynamic,6>> ransac_precompute_;
-  std::vector<Eigen::Matrix<double,Eigen::Dynamic,1>> meas_precompute_;
-  std::vector<Eigen::Matrix<double,Eigen::Dynamic,1>> alpha_precompute_;
-  std::vector<Eigen::Matrix<double,Eigen::Dynamic,1>> malpha_precompute_;
-  std::vector<bool> sensor_active_;
+  Eigen::Matrix<double,Eigen::Dynamic,6> ransac_precompute_;
+  Eigen::Matrix<double,Eigen::Dynamic,1> meas_precompute_;
+  Eigen::Matrix<double,Eigen::Dynamic,1> alpha_precompute_;
+  Eigen::Matrix<double,Eigen::Dynamic,1> malpha_precompute_;
+  // std::vector<bool> sensor_active_;
 
   Eigen::Matrix<double, 6, 6> last_lhs_;
   Eigen::Matrix<double, 6, 1> last_rhs_;

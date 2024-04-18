@@ -29,7 +29,7 @@ class DopplerCalib {
   DopplerCalib(const Options& options);
   // ~DopplerCalib();
 
-  std::vector<Point3D> calib_frame(std::vector<Point3D> &frame, const int& sensorid, const double& min_dist, const double& max_dist) const;
+  std::vector<Point3D> calib_frame(std::vector<Point3D> &frame, const double& min_dist, const double& max_dist) const;
   // void calib_frame(std::vector<Point3D> &frame, const int& sensorid, const double& min_dist, const double& max_dist) const;
 
  protected:
