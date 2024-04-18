@@ -80,8 +80,7 @@ DopplerCalib::DopplerCalib(const Options& options) : options_(options) {
   }
 }
 
-std::vector<Point3D> DopplerCalib::calib_frame(std::vector<Point3D> &frame, const int& sensorid, 
-    const double& min_dist, const double& max_dist) const {
+std::vector<Point3D> DopplerCalib::calib_frame(std::vector<Point3D> &frame, const double& min_dist, const double& max_dist) const {
   // required for atan2 approximation
   float pi = M_PI;
   float pi_2 = M_PI_2;
@@ -112,7 +111,7 @@ std::vector<Point3D> DopplerCalib::calib_frame(std::vector<Point3D> &frame, cons
     
     // determine row by matching by beam_id (0, 1, 2, or 3) and closest elevation to precalculated values
     // note: elevation_order_by_beam_id_[sensorid][point.beam_id] first column is mean elevation, second column is row id
-    const auto ele_diff = elevation_order_by_beam_id_[sensorid][point.beam_id].col(0).array() - elevation;
+    const auto ele_diff = elevation_order_by_beam_id_[point.sensor_id][point.beam_id].col(0).array() - elevation;
     double min_val = ele_diff(0)*ele_diff(0);
     int min_id = 0;
     for (int i = 1; i < ele_diff.rows(); ++i) {
@@ -124,7 +123,7 @@ std::vector<Point3D> DopplerCalib::calib_frame(std::vector<Point3D> &frame, cons
     }
     
     // picking the closest in elevation
-    const short row = elevation_order_by_beam_id_[sensorid][point.beam_id](min_id, 1);
+    const short row = elevation_order_by_beam_id_[point.sensor_id][point.beam_id](min_id, 1);
     if (!grid[row][col].first) {
       // keep first measurement in bin
       grid[row][col] = PointWFlag(true, &point);
@@ -140,6 +139,7 @@ std::vector<Point3D> DopplerCalib::calib_frame(std::vector<Point3D> &frame, cons
       if (grid[r][c].first) {
         // pushback if we have data in this elevation-azimuth bin
         out_frame.push_back(*grid[r][c].second);
+        int sensorid = (*grid[r][c].second).sensor_id;
 
         // apply linear regression model
         out_frame.back().radial_velocity -= (weights_[sensorid][r](c, 0) + weights_[sensorid][r](c, 1)*out_frame.back().range/250.0);

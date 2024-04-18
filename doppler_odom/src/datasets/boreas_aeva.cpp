@@ -167,7 +167,7 @@ BoreasAevaSequence::BoreasAevaSequence(const Options &options) : Sequence(option
       << gyro_data_.back().rows() << " x " << gyro_data_.back().cols() << std::endl;
 }
 
-std::vector<Pointcloud> BoreasAevaSequence::next(double& start_time, double& end_time) {
+Pointcloud BoreasAevaSequence::next(double& start_time, double& end_time) {
   if (!hasNext()) throw std::runtime_error("No more frames in sequence");
   int curr_frame = curr_frame_++;
   auto filename = filenames_.at(curr_frame);
@@ -175,16 +175,12 @@ std::vector<Pointcloud> BoreasAevaSequence::next(double& start_time, double& end
   // int64_t time_delta_micro = std::stoll(filename.substr(0, filename.find(".")));
   double time_delta_sec = static_cast<double>(time_delta_micro) / 1e6;
 
-  // load point cloud
+  // load point cloud (this dataset only has 1 sensor)
   auto frame = readPointCloud(dir_path_ + "/" + filename, time_delta_sec, start_time, end_time);
 
-  // TODO: logic for reading from more than 1 sensor
-  std::vector<Pointcloud> frames;
-  frames.push_back(frame);
+  LOG(INFO) << "# points: " << frame.size() << std::endl;
 
-  LOG(INFO) << "# points: " << frames.size() << ", " << frames[0].size() << std::endl;
-
-  return frames;
+  return frame;
 }
 
 std::vector<Eigen::MatrixXd> BoreasAevaSequence::next_gyro(const double& start_time, const double& end_time) {

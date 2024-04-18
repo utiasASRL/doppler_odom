@@ -1,6 +1,4 @@
 #include <filesystem>
-namespace fs = std::filesystem;
-
 #include <iostream>
 #include "glog/logging.h"
 #include "yaml-cpp/yaml.h"
@@ -108,7 +106,7 @@ int main(int argc, char** argv) {
   // setup logging
   FLAGS_log_dir = config["log_dir"].as<std::string>();
   FLAGS_alsologtostderr = 1;
-  fs::create_directories(FLAGS_log_dir);
+  std::filesystem::create_directories(FLAGS_log_dir);
   google::InitGoogleLogging(argv[0]);
   LOG(WARNING) << "Logging to " << FLAGS_log_dir;
 
@@ -146,12 +144,12 @@ int main(int argc, char** argv) {
       timer[0].second->start();
       double start_time;
       double end_time;
-      auto frames = seq->next(start_time, end_time);
+      auto frame = seq->next(start_time, end_time);
       timer[0].second->stop();
 
       // preprocessing step (downsample + regression, ~3.9ms)
       timer[1].second->start();
-      const auto preprocessed_frames = odometry->preprocessFrame(frames, start_time, end_time);
+      const auto preprocessed_frame = odometry->preprocessFrame(frame, start_time, end_time);
       timer[1].second->stop();
 
       // load gyro measurements that overlap with latest lidar frame (~0.1ms, not counted towards time in paper)
@@ -162,12 +160,12 @@ int main(int argc, char** argv) {
 
       // ransac (~1.1ms)
       timer[3].second->start();
-      const auto ransac_frames = odometry->ransacFrame(preprocessed_frames);
+      const auto ransac_frame = odometry->ransacFrame(preprocessed_frame);
       timer[3].second->stop();
 
       // estimate latest velocity (~0.5ms)
       timer[4].second->start();
-      odometry->registerFrame(ransac_frames, gyro);
+      odometry->solveFrame(ransac_frame, gyro);
       timer[4].second->stop();
 
       // integrate for latest pose (~0.01ms)

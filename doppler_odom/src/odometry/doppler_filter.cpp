@@ -15,6 +15,7 @@ namespace doppler_odom {
 DopplerFilter::DopplerFilter(const Options &options) : Odometry(options), options_(options) {
 
   // extrinsics
+  // TODO: move to data class and set as parameters
   T_sv_.resize(options_.num_sensors);
   T_sv_[0] << 0.9999366830849237, 0.008341717781538466, 0.0075534496251198685, -1.0119098938516395,
               -0.008341717774127972, 0.9999652112886684, -3.150635091210066e-05, -0.39658824335171944,
@@ -35,7 +36,7 @@ DopplerFilter::DopplerFilter(const Options &options) : Odometry(options), option
   temp.bottomRows<6>() = Eigen::Matrix<double, 6, 6>::Identity();
   wnoa_lhs_ = temp * options_.Qkinv * temp.transpose();
 
-  // TODO: set as parameters
+  // TODO: move to data class and set as parameters
   // gyro noise
   gyro_invcov_.resize(options_.num_sensors);
   gyro_invcov_[0] = Eigen::Matrix3d::Identity();
@@ -68,7 +69,7 @@ DopplerFilter::~DopplerFilter() {
   LOG(INFO) << "Dumping trajectory. - DONE" << std::endl;
 }
 
-std::vector<Pointcloud> DopplerFilter::preprocessFrame(std::vector<Pointcloud> &frames, const double& start_time, const double& end_time) {
+Pointcloud DopplerFilter::preprocessFrame(Pointcloud &frame, const double& start_time, const double& end_time) {
   // add a new frame
   int index_frame = trajectory_.size();
   trajectory_.emplace_back();
@@ -79,78 +80,37 @@ std::vector<Pointcloud> DopplerFilter::preprocessFrame(std::vector<Pointcloud> &
   LOG(INFO) << trajectory_.back().begin_timestamp << ", " <<  trajectory_.back().end_timestamp << std::endl;
 
   // downsample
-  std::vector<Pointcloud> keypoint_frames;
-  int sensorid = 0;
-  for (auto &frame : frames) {
-    if (frame.size() > 0) {
-      // randomly shuffle
-      // std::vector<size_t> v(frame.size());
-      // std::iota(v.begin(), v.end(), 0);
-      // std::shuffle(std::begin(v), std::end(v), random_engine_);  //  slow, adds ~2ms
-      // auto keypoints = calib_->calib_frame(frame, sensorid, 20.0, 150.0);  // downsamples into image and runs regression
-      auto keypoints = calib_->calib_frame(frame, sensorid, options_.min_dist, 150.0);  // downsamples into image and runs regression
-      keypoint_frames.push_back(keypoints);
-    }
-    else
-      keypoint_frames.push_back(Pointcloud());  // empty pointcloud
-    ++sensorid;
-  }
+  Pointcloud keypoint_frame = calib_->calib_frame(frame, options_.min_dist, 150.0);  // downsamples into image and runs regression
 
-  assert(keypoint_frames.size() == options_.num_sensors);
-  return keypoint_frames;
+  return keypoint_frame;
 }
 
-std::vector<Pointcloud> DopplerFilter::ransacFrame(const std::vector<Pointcloud> &const_frames) {
-  // these matrices/vectors are precomputed so we don't repeat calculations in ransac iterations
-  // also used when we estimate the 6DOF velocity in registerFrame
-  ransac_precompute_.clear(); ransac_precompute_.resize(options_.num_sensors);  // reset
-  meas_precompute_.clear(); meas_precompute_.resize(options_.num_sensors);      // reset
-  alpha_precompute_.clear();  alpha_precompute_.resize(options_.num_sensors);   // reset
-  malpha_precompute_.clear(); malpha_precompute_.resize(options_.num_sensors);  // reset
+Pointcloud DopplerFilter::ransacFrame(const Pointcloud &const_frame) {
 
-  int num_active = 0;   // number of active sensors in this frame (can vary if a sensor drops a frame)
-  sensor_active_.clear();
+  // initialize precomputation variables
+  Eigen::Matrix<double, Eigen::Dynamic,6> ransac_precompute_all = Eigen::Matrix<double, Eigen::Dynamic, 6>(const_frame.size(), 6);
+  Eigen::Matrix<double, Eigen::Dynamic,1> meas_precompute_all = Eigen::Matrix<double, Eigen::Dynamic, 1>(const_frame.size());
 
-  // These vectors will have all the measurements. Outliers will be need to be filtered out later.
-  std::vector<Eigen::Matrix<double,Eigen::Dynamic,6>> ransac_precompute_temp; ransac_precompute_temp.resize(options_.num_sensors);
-  std::vector<Eigen::Matrix<double,Eigen::Dynamic,1>> meas_precompute_temp; meas_precompute_temp.resize(options_.num_sensors);
+  // loop over each point to precompute
+  for (int i = 0; i < const_frame.size(); ++i) {
+    // the 'C' in y = C*x
+    ransac_precompute_all.row(i) = const_frame[i].pt.transpose()/const_frame[i].range * adT_sv_top3rows_[const_frame[i].sensor_id];  
 
-  std::vector<Eigen::Matrix<double,Eigen::Dynamic,1>> errors; errors.resize(options_.num_sensors);
-  std::vector<std::uniform_int_distribution<int>> dist_vec; // uniform random distribution for each sensor
-
-  // loop over each sensor
-  for (int i = 0; i < options_.num_sensors; ++i) {
-    if (const_frames[i].size() <= 0) {
-      dist_vec.push_back(std::uniform_int_distribution<int>(0, 1)); // dummy distribution
-      sensor_active_.push_back(false);
-      continue; // no points
-    }
-
-    num_active++; // this sensor is active, so increment
-    sensor_active_.push_back(true);
-    ransac_precompute_temp[i] = Eigen::Matrix<double,Eigen::Dynamic,6>(const_frames[i].size(), 6);  // preallocate
-    meas_precompute_temp[i] = Eigen::Matrix<double,Eigen::Dynamic,1>(const_frames[i].size());       // preallocate
-    errors[i] = Eigen::Matrix<double,Eigen::Dynamic,1>(const_frames[i].size());                 // preallocate
-
-    // loop over each point to construct 'stacked' measurement model
-    for (int j = 0; j < const_frames[i].size(); ++j) {
-      // ransac_precompute_temp[i].row(j) = const_frames[i][j].pt.normalized().transpose() * adT_sv_top3rows_[i];  // the 'C' in y = C*x
-      ransac_precompute_temp[i].row(j) = const_frames[i][j].pt.transpose()/const_frames[i][j].range * adT_sv_top3rows_[i];  // the 'C' in y = C*x
-      meas_precompute_temp[i](j) = const_frames[i][j].radial_velocity;  // the 'y' in y = C*x
-    }
-    dist_vec.push_back(std::uniform_int_distribution<int>(0, const_frames[i].size() - 1));  // sets index range
+    // the 'y' in y = C*x
+    meas_precompute_all(i) = const_frame[i].radial_velocity;  // the 'y' in y = C*x
   }
+
+  // initialize uniform distribution
+  std::uniform_int_distribution<int> uni_dist(0, const_frame.size() - 1);
 
   // ransac
   Eigen::Matrix3d lhs;
   Eigen::Vector3d rhs;
   Eigen::Vector3d G;
   int max_inliers = 0;
-  using bool_vec = Eigen::Array<bool,Eigen::Dynamic,1>;
-  std::vector<std::shared_ptr<bool_vec>> inliers;       
-  std::vector<std::shared_ptr<bool_vec>> best_inliers;  
-  inliers.resize(options_.num_sensors);       // each element corresponds to a sensor
-  best_inliers.resize(options_.num_sensors);  // each element corresponds to a sensor
+  // using bool_vec = Eigen::Array<bool,Eigen::Dynamic,1>;
+  Eigen::Array<bool, Eigen::Dynamic,1> inliers;       
+  Eigen::Array<bool, Eigen::Dynamic,1> best_inliers;  
   Eigen::Vector3d best_varpi;   // for debugging
   Eigen::Vector3d curr_varpi;   // for debugging
   for (int iter = 0; iter < options_.ransac_max_iter; ++iter) {
@@ -158,116 +118,94 @@ std::vector<Pointcloud> DopplerFilter::ransacFrame(const std::vector<Pointcloud>
     lhs.setZero();
     rhs.setZero();
 
-    // loop over each sensor
-    for (int i = 0; i < options_.num_sensors; ++i) {
-      if (!sensor_active_[i])
-        continue; // skip
-
-      // int sample1 = dist_vec[i](random_engine_);
-      // int sample2 = dist_vec[i](random_engine_);
-
-      // sample until we satisfy min. range condition for ransac
-      int sample1, sample2;
-      while (true) {
-        sample1 = dist_vec[i](random_engine_);
-        if (const_frames[i][sample1].range > options_.ransac_min_range)
-          break;
-      }
-      while (true) {
-        sample2 = dist_vec[i](random_engine_);
-        if (const_frames[i][sample2].range > options_.ransac_min_range)
-          break;
-      }
-
-      // sample 1
-      G(0) = ransac_precompute_temp[i](sample1, 0);
-      G(1) = ransac_precompute_temp[i](sample1, 1);
-      G(2) = ransac_precompute_temp[i](sample1, 5);
-      lhs += G * G.transpose();
-      rhs += G * meas_precompute_temp[i](sample1);
-
-      // sample 2
-      G(0) = ransac_precompute_temp[i](sample2, 0);
-      G(1) = ransac_precompute_temp[i](sample2, 1);
-      G(2) = ransac_precompute_temp[i](sample2, 5);
-      lhs += G * G.transpose();
-      rhs += G * meas_precompute_temp[i](sample2);
-    } // end loop i
-
-    int num_inliers = 0;
-    if (num_active == 1) {
-      // 2 dof (only 1 sensor available)
-      Eigen::Matrix2d lhs2d;
-      lhs2d << lhs(0, 0), lhs(0, 2), lhs(2, 0), lhs(2, 2);
-      if (fabs(lhs2d.determinant()) < 1e-7)
-        continue; // not invertible
-
-      Eigen::Vector2d rhs2d;
-      rhs2d << rhs(0), rhs(2);
-
-      Eigen::Vector2d varpi2d = lhs2d.inverse()*rhs2d;  // inverse should be fast for 2x2
-      curr_varpi << varpi2d(0), 0.0, varpi2d(1);
+    // sample until we satisfy min. range condition for ransac
+    int sample1, sample2;
+    for (int k = 0; k < 1e3; ++k) { // 1e3 is safety measure to prevent infinite loop
+      sample1 = uni_dist(random_engine_);
+      if (const_frame[sample1].range > options_.ransac_min_range)
+        break;
     }
-    else if (num_active > 1) {
-      // 3 dof (multiple sensors available)
-      if (fabs(lhs.determinant()) < 1e-7)
-        continue; // not invertible
-      curr_varpi = lhs.inverse()*rhs;  // inverse should be fast for 3x3
+    int safety_count = 0;
+    for (int k = 0; k < 1e3; ++k) { // 1e3 is safety measure to prevent infinite loop
+      sample2 = uni_dist(random_engine_);
+      if (const_frame[sample2].range > options_.ransac_min_range)
+        break;
     }
-    else
-      throw std::runtime_error("invalid ransac");
 
-    // calculate error and inliers (loop over each sensor)
-    for (int i = 0; i < options_.num_sensors; ++i) {
-      if (!sensor_active_[i])
-        continue; // skip
-      errors[i] = meas_precompute_temp[i] - ransac_precompute_temp[i].col(0)*curr_varpi(0) - ransac_precompute_temp[i].col(1)*curr_varpi(1) 
-        - ransac_precompute_temp[i].col(5)*curr_varpi(2);
-      inliers[i] = std::make_shared<bool_vec>(errors[i].array().abs() < options_.ransac_thres);
-      num_inliers += inliers[i]->count();
-    } // end for i
+    // sample 1
+    G(0) = ransac_precompute_all(sample1, 0);
+    G(1) = ransac_precompute_all(sample1, 1);
+    G(2) = ransac_precompute_all(sample1, 5);
+    lhs += G * G.transpose();
+    rhs += G * meas_precompute_all(sample1);
 
+    // sample 2
+    G(0) = ransac_precompute_all(sample2, 0);
+    G(1) = ransac_precompute_all(sample2, 1);
+    G(2) = ransac_precompute_all(sample2, 5);
+    lhs += G * G.transpose();
+    rhs += G * meas_precompute_all(sample2);
+
+    // 2 DOF solve
+    Eigen::Matrix2d lhs2d;
+    lhs2d << lhs(0, 0), lhs(0, 2), lhs(2, 0), lhs(2, 2);
+    if (fabs(lhs2d.determinant()) < 1e-7)
+      continue; // not invertible
+
+    Eigen::Vector2d rhs2d;
+    rhs2d << rhs(0), rhs(2);
+
+    Eigen::Vector2d varpi2d = lhs2d.inverse()*rhs2d;  // inverse should be fast for 2x2
+    curr_varpi << varpi2d(0), 0.0, varpi2d(1);
+
+    // calculate error and inliers 
+    auto errors = meas_precompute_all - ransac_precompute_all.col(0)*curr_varpi(0) 
+                                      - ransac_precompute_all.col(1)*curr_varpi(1) 
+                                      - ransac_precompute_all.col(5)*curr_varpi(2);
+    inliers = errors.array().abs() < options_.ransac_thres;
+    int num_inliers = inliers.count();
+
+    // check for improvement in number of inliers
     if (num_inliers > max_inliers) {
       max_inliers = num_inliers;
       best_varpi = curr_varpi;  // for debugging
-      for (int i = 0; i < options_.num_sensors; ++i)
-        best_inliers[i] = inliers[i];
+      best_inliers = inliers;
     }
   }
   // std::cout << best_varpi.transpose() << std::endl;   // for debugging
 
   // create new frame with only inliers
-  std::vector<Pointcloud> inlier_frames;  inlier_frames.resize(options_.num_sensors); // preallocate
+  Pointcloud inlier_frame;
+  inlier_frame.reserve(max_inliers);
 
-  // loop over each sensor
-  for (int i = 0; i < options_.num_sensors; ++i) {
-    if (!sensor_active_[i])
-      continue; // no points. skip
-    int num_inliers = best_inliers[i]->count();
-    inlier_frames[i].reserve(num_inliers);
-    ransac_precompute_[i] = Eigen::Matrix<double,Eigen::Dynamic,6>(num_inliers, 6);
-    meas_precompute_[i] = Eigen::Matrix<double,Eigen::Dynamic,1>(num_inliers);
-    alpha_precompute_[i] = Eigen::Matrix<double,Eigen::Dynamic,1>(num_inliers);
-    malpha_precompute_[i] = Eigen::Matrix<double,Eigen::Dynamic,1>(num_inliers);
-    int k = 0;
-    for (int j = 0; j < const_frames[i].size(); ++j) {
-      if ((*best_inliers[i])(j)) {
-        inlier_frames[i].push_back(const_frames[i][j]);
-        ransac_precompute_[i].row(k) = ransac_precompute_temp[i].row(j);
-        meas_precompute_[i][k] = meas_precompute_temp[i][j];
-        alpha_precompute_[i][k] = std::min(1.0, std::max(0.0, (const_frames[i][j].timestamp - trajectory_.back().begin_timestamp) / 
-            (trajectory_.back().end_timestamp - trajectory_.back().begin_timestamp)));
-        malpha_precompute_[i][k] = std::max(0.0, 1.0 - alpha_precompute_[i][k]);
-        k++;
-      }
-    }
+  // precompute for full solve
+  ransac_precompute_ = Eigen::Matrix<double, Eigen::Dynamic, 6>(max_inliers, 6);
+  meas_precompute_ = Eigen::Matrix<double, Eigen::Dynamic, 1>(max_inliers);
+  alpha_precompute_ = Eigen::Matrix<double, Eigen::Dynamic, 1>(max_inliers);
+  malpha_precompute_ = Eigen::Matrix<double, Eigen::Dynamic, 1>(max_inliers);
+
+  // loop over each measurement
+  int k = 0;
+  for (int i = 0; i < const_frame.size(); ++i) {
+    if (!best_inliers(i))
+      continue; // skip since it's not an inlier
+
+    inlier_frame.push_back(const_frame[i]);
+    ransac_precompute_.row(k) = ransac_precompute_all.row(i);
+    meas_precompute_[k] = meas_precompute_all[i];
+    alpha_precompute_[k] = std::min(1.0, std::max(0.0, (const_frame[i].timestamp - trajectory_.back().begin_timestamp) / 
+        (trajectory_.back().end_timestamp - trajectory_.back().begin_timestamp)));
+    malpha_precompute_[k] = std::max(0.0, 1.0 - alpha_precompute_[k]);
+    ++k;
   }
-  LOG(INFO) << "before ransac: " << const_frames[0].size() << std::endl;
-  LOG(INFO) << "after ransac: " << inlier_frames[0].size() << std::endl;
-  return inlier_frames;
+
+  LOG(INFO) << "before ransac: " << const_frame.size() << std::endl;
+  LOG(INFO) << "after ransac: " << inlier_frame.size() << std::endl;
+  return inlier_frame;
 }
 
-void DopplerFilter::registerFrame(const std::vector<Pointcloud> &const_frames, const std::vector<Eigen::MatrixXd> &gyro) {
+void DopplerFilter::solveFrame(const Pointcloud &const_frame, const std::vector<Eigen::MatrixXd> &gyro) {
+  // we build a 12x12 linear system and marginalize to a 6x6 system to solve for the latest vehicle velocity
   Eigen::Matrix<double, 12, 12> lhs = Eigen::Matrix<double, 12, 12>::Zero();
   Eigen::Matrix<double, 12, 1> rhs = Eigen::Matrix<double, 12, 1>::Zero();
 
@@ -308,19 +246,11 @@ void DopplerFilter::registerFrame(const std::vector<Pointcloud> &const_frames, c
   } // end for i
 
   // doppler measurements
-  for (int i = 0; i < options_.num_sensors; ++i) {
-    if (!sensor_active_[i])
-      continue; // no measurements
-    Eigen::Matrix<double, Eigen::Dynamic, 12> G(const_frames[i].size(), 12); // N x 12
-    G.leftCols<6>() = ransac_precompute_[i].array().colwise() * malpha_precompute_[i].array();
-    G.rightCols<6>() = ransac_precompute_[i].array().colwise() * alpha_precompute_[i].array();
-
-    lhs += G.transpose() * G / (0.2*0.2);   // TODO: add variance as parameter
-    rhs += G.transpose() * meas_precompute_[i] / (0.2*0.2);
-  } // end for i
-
-  // TODO: Is calling inverse on 6x6 slower than using a linear solver?
-  // still need to check. This function takes 0.54ms on average atm though
+  Eigen::Matrix<double, Eigen::Dynamic, 12> G(const_frame.size(), 12); // N x 12
+  G.leftCols<6>() = ransac_precompute_.array().colwise() * malpha_precompute_.array();
+  G.rightCols<6>() = ransac_precompute_.array().colwise() * alpha_precompute_.array();
+  lhs += G.transpose() * G / (0.2*0.2);   // TODO: add variance as parameter
+  rhs += G.transpose() * meas_precompute_ / (0.2*0.2);
 
   // marginalize
   Eigen::Matrix<double, 6, 6> temp = lhs.bottomLeftCorner<6,6>()*lhs.topLeftCorner<6,6>().inverse();
@@ -328,10 +258,11 @@ void DopplerFilter::registerFrame(const std::vector<Pointcloud> &const_frames, c
   Eigen::Matrix<double, 6, 1> rhs_new = rhs.tail<6>() - temp*rhs.head<6>();
 
   // solve
-  trajectory_.back().varpi = lhs_new.inverse() * rhs_new;
+  trajectory_.back().varpi = lhs_new.llt().solve(rhs_new);
   last_lhs_ = lhs_new;
   last_rhs_ = rhs_new;
 
+  // std::cout << trajectory_.back().varpi.transpose() << std::endl;
   return;
 }
 
