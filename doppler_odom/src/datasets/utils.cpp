@@ -212,4 +212,10 @@ Eigen::MatrixXd readBoreasGyroToEigenXd(const std::string &file_path, const int6
   return output;
 }
 
+bool filecomp (std::string file1, std::string file2) { 
+  long long i = std::stoll(file1.substr(0, file1.find(".")));
+  long long j = std::stoll(file2.substr(0, file2.find(".")));
+  return (i<j); 
+}
+
 }  // namespace doppler_odom

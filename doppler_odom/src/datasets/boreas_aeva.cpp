@@ -138,12 +138,6 @@ Pointcloud readPointCloud(const std::string &path, const double &time_delta_sec,
 
 }  // namespace
 
-bool filecomp (std::string file1, std::string file2) { 
-  long long i = std::stoll(file1.substr(0, file1.find(".")));
-  long long j = std::stoll(file2.substr(0, file2.find(".")));
-  return (i<j); 
-}
-
 BoreasAevaSequence::BoreasAevaSequence(const Options &options) : Sequence(options) {
   dir_path_ = options_.root_path + "/" + options_.sequence + "/aeva/";
   auto dir_iter = std::filesystem::directory_iterator(dir_path_);

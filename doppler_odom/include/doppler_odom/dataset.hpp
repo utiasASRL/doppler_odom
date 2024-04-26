@@ -107,3 +107,4 @@ struct DatasetRegister {
 
 ///
 #include "doppler_odom/datasets/boreas_aeva.hpp"
+#include "doppler_odom/datasets/aevahq.hpp"
