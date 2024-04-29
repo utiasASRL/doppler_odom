@@ -3,6 +3,7 @@
 #include <fstream>
 
 #include "doppler_odom/odometry.hpp"
+#include "doppler_odom/calib/doppler_calib.hpp"
 
 namespace doppler_odom {
 
@@ -11,6 +12,7 @@ class DopplerFilter : public Odometry {
 
   struct Options : public Odometry::Options {
     std::vector<Eigen::Vector3d> const_gyro_bias; // constant gyro bias (1 for each sensor)
+    DopplerCalib::Options dcalib_options;
   };
 
   DopplerFilter(const Options &options);
@@ -34,6 +36,9 @@ class DopplerFilter : public Odometry {
 
   // precompute
   Eigen::Matrix<double, 12, 12> wnoa_lhs_;
+
+  // calib
+  DopplerCalib::ConstPtr doppler_calib_;
 
   DOPPLER_ODOM_REGISTER_ODOMETRY("doppler_filter", DopplerFilter);
 };

@@ -12,15 +12,14 @@ namespace doppler_odom {
 
 namespace {
 
-Pointcloud readPointCloud(const std::string &path, const double &time_delta_sec, double& start_time, double& end_time) {
+Pointcloud readPointCloud(const std::string& path, double time_delta_sec, int sensor_id, double& start_time, double& end_time) {
   Pointcloud frame;
 
   // read bin file
   std::ifstream ifs(path, std::ios::binary);
   std::vector<char> buffer(std::istreambuf_iterator<char>(ifs), {});
   unsigned float_offset = 4;
-  // unsigned fields = 8;  // x, y, z, i, r, t, b, s (note: s is sensor id)
-  unsigned fields = 7;  // x, y, z, i, r, t, b
+  unsigned fields = 11;  // x, y, z, radial velocity, intensity, signal quality, reflectivity, time, beam_id, line_id, face_id
   unsigned point_step = float_offset * fields;
   unsigned numPointsIn = std::floor(buffer.size() / point_step);
 
@@ -32,6 +31,7 @@ Pointcloud readPointCloud(const std::string &path, const double &time_delta_sec,
   for (unsigned i(0); i < numPointsIn; i++) {
     Point3D new_point;
 
+    // x y z
     int bufpos = i * point_step;
     int offset = 0;
     new_point.pt[0] = getFloatFromByteArray(buffer.data(), bufpos + offset * float_offset);
@@ -40,23 +40,27 @@ Pointcloud readPointCloud(const std::string &path, const double &time_delta_sec,
     ++offset;
     new_point.pt[2] = getFloatFromByteArray(buffer.data(), bufpos + offset * float_offset);
 
-    ++offset;
-    // intensity skipped
+    // others
     ++offset;
     new_point.radial_velocity = getFloatFromByteArray(buffer.data(), bufpos + offset * float_offset);
     ++offset;
+    new_point.intensity = getFloatFromByteArray(buffer.data(), bufpos + offset * float_offset);
+    ++offset;
+    // signal quality skipped
+    ++offset;
+    // reflectivity skipped
+    ++offset;
     new_point.timestamp = getFloatFromByteArray(buffer.data(), bufpos + offset * float_offset);
-
     ++offset;
     new_point.beam_id = (int)getFloatFromByteArray(buffer.data(), bufpos + offset * float_offset);
+    ++offset;
+    new_point.line_id = (int)getFloatFromByteArray(buffer.data(), bufpos + offset * float_offset);
+    ++offset;
+    new_point.face_id = (int)getFloatFromByteArray(buffer.data(), bufpos + offset * float_offset);
 
-    if (new_point.timestamp < frame_first_timestamp) {
-      frame_first_timestamp = new_point.timestamp;
-    }
-
-    if (new_point.timestamp > frame_last_timestamp) {
-      frame_last_timestamp = new_point.timestamp;
-    }
+    // for simplicity, we'll just reject points that are not within the start and end times
+    if (new_point.timestamp < frame_first_timestamp || new_point.timestamp > frame_last_timestamp)
+      continue;
 
     frame.push_back(new_point);
   }
@@ -65,7 +69,7 @@ Pointcloud readPointCloud(const std::string &path, const double &time_delta_sec,
     frame[i].timestamp += time_delta_sec;
   }
 
-  start_time = frame_first_timestamp + time_delta_sec;
+  start_time = time_delta_sec; // frame_first_timestamp + time_delta_sec;
   end_time = frame_last_timestamp + time_delta_sec;
   return frame;
 }
@@ -141,18 +145,32 @@ AevaHQSequence::AevaHQSequence(const Options &options) : Sequence(options) {
 
 Pointcloud AevaHQSequence::next(double& start_time, double& end_time) {
   if (!hasNext()) throw std::runtime_error("No more frames in sequence");
-  int curr_frame = curr_frame_[0]++;
-  auto filename = filenames_[0].at(curr_frame);
-  int64_t time_delta_micro = std::stoll(filename.substr(0, filename.find("."))) - initial_timestamp_micro_;
-  // int64_t time_delta_micro = std::stoll(filename.substr(0, filename.find(".")));
-  double time_delta_sec = static_cast<double>(time_delta_micro) / 1e6;
 
-  // load point cloud (this dataset only has 1 sensor)
-  auto frame = readPointCloud(dir_path_[0] + "/" + filename, time_delta_sec, start_time, end_time);
+  // load active sensors
+  Pointcloud output_frame;
+  for (int sensor_id = 0; sensor_id < 4; ++sensor_id) {
+    // skip if inactive
+    if (options_.active_sensors[sensor_id] == false)
+      continue;
+    
+    // frame_id, filename, and start time
+    int curr_frame = curr_frame_[sensor_id]++;  // grab frame id and increment after
+    auto& filename = filenames_[sensor_id].at(curr_frame);
+    int64_t time_delta_micro = std::stoll(filename.substr(0, filename.find("."))) - initial_timestamp_micro_;
+    double time_delta_sec = static_cast<double>(time_delta_micro) / 1e6;
 
-  LOG(INFO) << "# points: " << frame.size() << std::endl;
+    // load and concatenate
+    auto frame = readPointCloud(dir_path_[0] + "/" + filename, time_delta_sec, sensor_id, start_time, end_time);
+    output_frame.insert(
+      output_frame.end(),
+      std::make_move_iterator(frame.begin()),
+      std::make_move_iterator(frame.end())
+    );
+  }
 
-  return frame;
+  LOG(INFO) << "# points: " << output_frame.size() << std::endl;
+
+  return output_frame;
 }
 
 std::vector<Eigen::MatrixXd> AevaHQSequence::next_gyro(const double& start_time, const double& end_time) {

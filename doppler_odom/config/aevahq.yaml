@@ -9,7 +9,7 @@ dataset_options:
   sequence: "routeB_run3_binary"
   init_frame: 0
   last_frame: 100000
-  active_sensors: [true]
+  active_sensors: [false, false, false, true]  # 0: front, 1: left, 2: right, 3: back
 
 # doppler calib
 doppler_options:

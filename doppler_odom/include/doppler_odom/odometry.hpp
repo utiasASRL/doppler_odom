@@ -1,9 +1,9 @@
 #pragma once
 
 #include "doppler_odom/trajectory.hpp"
-#include "doppler_odom/calib/doppler_calib.hpp"
 
 #include <random>
+#include <memory>
 
 namespace doppler_odom {
 
@@ -56,10 +56,6 @@ class Odometry {
   virtual Eigen::Matrix4d integrateForPose() = 0;
   virtual std::vector<double> getLatestFrameTimes() = 0;
 
-  void setDopplerCalib(const DopplerCalib::ConstPtr& calib) {
-    calib_ = calib;
-  };
-
   Trajectory trajectory() {
     return trajectory_;
   };
@@ -91,8 +87,6 @@ class Odometry {
 
   Trajectory trajectory_;
   std::vector<Eigen::Matrix4d> poses_;
-
-  DopplerCalib::ConstPtr calib_;
 
  private:
   const Options options_;

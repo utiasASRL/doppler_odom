@@ -20,8 +20,6 @@ struct OdomOptions {
 
   std::string odometry;
   Odometry::Options::Ptr odometry_options;
-
-  DopplerCalib::Options doppler_options;  
 };
 
 doppler_odom::OdomOptions loadOptions(const YAML::Node& config) {
@@ -38,16 +36,6 @@ doppler_odom::OdomOptions loadOptions(const YAML::Node& config) {
   dataset_options.last_frame = config["dataset_options"]["last_frame"].as<int>();
   std::vector<bool> active_sensors = config["dataset_options"]["active_sensors"].as<std::vector<bool>>();
   dataset_options.active_sensors = active_sensors;
-
-  // calib
-  auto& doppler_options = options.doppler_options;
-  doppler_options.root_path = config["doppler_options"]["root_path"].as<std::string>();
-  doppler_options.azimuth_res = config["doppler_options"]["azimuth_res"].as<double>();
-  doppler_options.azimuth_start = config["doppler_options"]["azimuth_start"].as<double>();
-  doppler_options.azimuth_end = config["doppler_options"]["azimuth_end"].as<double>();
-  doppler_options.num_rows = config["doppler_options"]["num_rows"].as<int>();
-  doppler_options.num_cols = config["doppler_options"]["num_cols"].as<int>();
-  doppler_options.active_sensors = active_sensors;
 
   // odometry
   if (options.odometry == "doppler_filter")
@@ -88,6 +76,16 @@ doppler_odom::OdomOptions loadOptions(const YAML::Node& config) {
       dfilter_options->const_gyro_bias.clear();
       for (auto& bias: temp_vec)
         dfilter_options->const_gyro_bias.push_back(Eigen::Vector3d(bias.data()));
+
+      // Doppler calib
+      auto& dcalib_options = dfilter_options->dcalib_options;
+      dcalib_options.root_path = config["doppler_options"]["root_path"].as<std::string>();
+      dcalib_options.azimuth_res = config["doppler_options"]["azimuth_res"].as<double>();
+      dcalib_options.azimuth_start = config["doppler_options"]["azimuth_start"].as<double>();
+      dcalib_options.azimuth_end = config["doppler_options"]["azimuth_end"].as<double>();
+      dcalib_options.num_rows = config["doppler_options"]["num_rows"].as<int>();
+      dcalib_options.num_cols = config["doppler_options"]["num_cols"].as<int>();
+      dcalib_options.active_sensors = active_sensors;
     }
   }
 
@@ -116,9 +114,6 @@ int main(int argc, char** argv) {
   // get dataset
   const auto dataset = Dataset::Get(options.dataset, options.dataset_options);
 
-  // doppler calibration
-  const auto doppler_calib = std::make_shared<DopplerCalib>(options.doppler_options);
-
   // loop through sequences
   while (auto seq = dataset->next()) {
     LOG(WARNING) << "Running odometry on sequence: " << seq->name() << std::endl;
@@ -134,7 +129,7 @@ int main(int argc, char** argv) {
 
     // get odometry
     auto odometry = Odometry::Get(options.odometry, *options.odometry_options);
-    odometry->setDopplerCalib(doppler_calib);
+    // odometry->setDopplerCalib(doppler_calib);
 
     bool odometry_success = true;
     while (seq->hasNext()) {

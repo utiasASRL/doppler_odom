@@ -43,6 +43,9 @@ DopplerFilter::DopplerFilter(const Options &options) : Odometry(options), option
   gyro_invcov_[0](0,0) = 1.0/(2.9e-4);
   gyro_invcov_[0](1,1) = 1.0/(4.7e-4);
   gyro_invcov_[0](2,2) = 1.0/(3.4e-5);
+
+  // Doppler calib
+  doppler_calib_ = std::make_shared<DopplerCalib>(options_.dcalib_options);
 }
 
 DopplerFilter::~DopplerFilter() {
@@ -80,7 +83,7 @@ Pointcloud DopplerFilter::preprocessFrame(Pointcloud &frame, const double& start
   LOG(INFO) << trajectory_.back().begin_timestamp << ", " <<  trajectory_.back().end_timestamp << std::endl;
 
   // downsample
-  Pointcloud keypoint_frame = calib_->calib_frame(frame, options_.min_dist, 150.0);  // downsamples into image and runs regression
+  Pointcloud keypoint_frame = doppler_calib_->calib_frame(frame, options_.min_dist, 150.0);  // downsamples into image and runs regression
 
   return keypoint_frame;
 }
