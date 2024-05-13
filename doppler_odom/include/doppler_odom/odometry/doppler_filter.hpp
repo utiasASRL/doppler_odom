@@ -19,7 +19,7 @@ class DopplerFilter : public Odometry {
   ~DopplerFilter();
 
   void solveFrame(const Pointcloud& frame, const std::vector<Eigen::MatrixXd>& gyro) override;
-  Pointcloud preprocessFrame(Pointcloud &frame, const double& start_time, const double& end_time) override;
+  Pointcloud preprocessFrame(Pointcloud &frame, double start_time, double end_time) override;
   Pointcloud ransacFrame(const Pointcloud &frame) override;
   Eigen::Matrix4d integrateForPose() override;
   
@@ -31,7 +31,7 @@ class DopplerFilter : public Odometry {
   }
 
  private:
-  void initializeTimestamp(int index_frame, const std::vector<Pointcloud> &const_frame);
+  void initializeTimestamp(int index_frame, const std::vector<Pointcloud>& const_frame);
   const Options options_;
 
   // precompute

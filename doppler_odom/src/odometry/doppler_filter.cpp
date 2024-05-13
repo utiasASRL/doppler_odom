@@ -12,7 +12,7 @@
 
 namespace doppler_odom {
 
-DopplerFilter::DopplerFilter(const Options &options) : Odometry(options), options_(options) {
+DopplerFilter::DopplerFilter(const Options& options) : options_(options) {
 
   // extrinsics
   // TODO: move to data class and set as parameters
@@ -53,7 +53,7 @@ DopplerFilter::~DopplerFilter() {
   trajectory_file.open(options_.debug_path + "/velocity.txt", std::ios::out);
   trajectory_file << std::fixed << std::setprecision(12) << trajectory_[0].begin_timestamp << " " << 0.0 << " " << 0.0 << " " 
     << 0.0 << " " << 0.0 << " " << 0.0 << " " << 0.0 << std::endl;
-  for (int i = 0; i < trajectory_.size(); ++i) {
+  for (size_t i = 0; i < trajectory_.size(); ++i) {
     trajectory_file << std::fixed << std::setprecision(12) << trajectory_[i].end_timestamp << " " << trajectory_[i].varpi(0) 
       << " " << trajectory_[i].varpi(1) << " " << trajectory_[i].varpi(2)
       << " " << trajectory_[i].varpi(3) << " " << trajectory_[i].varpi(4) 
@@ -62,7 +62,7 @@ DopplerFilter::~DopplerFilter() {
 
   std::ofstream pose_file;
   pose_file.open(options_.debug_path + "/pose.txt", std::ios::out);
-  for (int i = 0; i < poses_.size(); ++i) {
+  for (size_t i = 0; i < poses_.size(); ++i) {
     pose_file << std::fixed << std::setprecision(12) 
              << poses_[i](0,0) << " " << poses_[i](0,1) << " " << poses_[i](0,2) << " " << poses_[i](0,3)
       << " " << poses_[i](1,0) << " " << poses_[i](1,1) << " " << poses_[i](1,2) << " " << poses_[i](1,3)
@@ -72,7 +72,7 @@ DopplerFilter::~DopplerFilter() {
   LOG(INFO) << "Dumping trajectory. - DONE" << std::endl;
 }
 
-Pointcloud DopplerFilter::preprocessFrame(Pointcloud &frame, const double& start_time, const double& end_time) {
+Pointcloud DopplerFilter::preprocessFrame(Pointcloud& frame, double start_time, double end_time) {
   // add a new frame
   int index_frame = trajectory_.size();
   trajectory_.emplace_back();
@@ -88,14 +88,14 @@ Pointcloud DopplerFilter::preprocessFrame(Pointcloud &frame, const double& start
   return keypoint_frame;
 }
 
-Pointcloud DopplerFilter::ransacFrame(const Pointcloud &const_frame) {
+Pointcloud DopplerFilter::ransacFrame(const Pointcloud& const_frame) {
 
   // initialize precomputation variables
   Eigen::Matrix<double, Eigen::Dynamic,6> ransac_precompute_all = Eigen::Matrix<double, Eigen::Dynamic, 6>(const_frame.size(), 6);
   Eigen::Matrix<double, Eigen::Dynamic,1> meas_precompute_all = Eigen::Matrix<double, Eigen::Dynamic, 1>(const_frame.size());
 
   // loop over each point to precompute
-  for (int i = 0; i < const_frame.size(); ++i) {
+  for (size_t i = 0; i < const_frame.size(); ++i) {
     // the 'C' in y = C*x
     ransac_precompute_all.row(i) = const_frame[i].pt.transpose()/const_frame[i].range * adT_sv_top3rows_[const_frame[i].sensor_id];  
 
@@ -128,7 +128,6 @@ Pointcloud DopplerFilter::ransacFrame(const Pointcloud &const_frame) {
       if (const_frame[sample1].range > options_.ransac_min_range)
         break;
     }
-    int safety_count = 0;
     for (int k = 0; k < 1e3; ++k) { // 1e3 is safety measure to prevent infinite loop
       sample2 = uni_dist(random_engine_);
       if (const_frame[sample2].range > options_.ransac_min_range)
@@ -189,7 +188,7 @@ Pointcloud DopplerFilter::ransacFrame(const Pointcloud &const_frame) {
 
   // loop over each measurement
   int k = 0;
-  for (int i = 0; i < const_frame.size(); ++i) {
+  for (size_t i = 0; i < const_frame.size(); ++i) {
     if (!best_inliers(i))
       continue; // skip since it's not an inlier
 
@@ -207,7 +206,7 @@ Pointcloud DopplerFilter::ransacFrame(const Pointcloud &const_frame) {
   return inlier_frame;
 }
 
-void DopplerFilter::solveFrame(const Pointcloud &const_frame, const std::vector<Eigen::MatrixXd> &gyro) {
+void DopplerFilter::solveFrame(const Pointcloud& const_frame, const std::vector<Eigen::MatrixXd>& gyro) {
   // we build a 12x12 linear system and marginalize to a 6x6 system to solve for the latest vehicle velocity
   Eigen::Matrix<double, 12, 12> lhs = Eigen::Matrix<double, 12, 12>::Zero();
   Eigen::Matrix<double, 12, 1> rhs = Eigen::Matrix<double, 12, 1>::Zero();
@@ -269,7 +268,7 @@ void DopplerFilter::solveFrame(const Pointcloud &const_frame, const std::vector<
   return;
 }
 
-void DopplerFilter::initializeTimestamp(int index_frame, const std::vector<Pointcloud> &const_frames) {
+void DopplerFilter::initializeTimestamp(int index_frame, const std::vector<Pointcloud>& const_frames) {
   double min_timestamp = std::numeric_limits<double>::max();
   double max_timestamp = std::numeric_limits<double>::min();
   for (const auto &const_frame : const_frames) {

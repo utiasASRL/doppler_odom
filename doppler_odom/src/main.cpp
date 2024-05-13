@@ -22,6 +22,7 @@ struct OdomOptions {
   Odometry::Options::Ptr odometry_options;
 };
 
+// load options from yaml file
 doppler_odom::OdomOptions loadOptions(const YAML::Node& config) {
   doppler_odom::OdomOptions options;
   options.dataset = config["dataset"].as<std::string>();
@@ -94,6 +95,7 @@ doppler_odom::OdomOptions loadOptions(const YAML::Node& config) {
 
 }  // namespace doppler_odom
 
+// main estimator loop through data sequences
 int main(int argc, char** argv) {
   using namespace doppler_odom;
 
@@ -129,7 +131,6 @@ int main(int argc, char** argv) {
 
     // get odometry
     auto odometry = Odometry::Get(options.odometry, *options.odometry_options);
-    // odometry->setDopplerCalib(doppler_calib);
 
     bool odometry_success = true;
     while (seq->hasNext()) {

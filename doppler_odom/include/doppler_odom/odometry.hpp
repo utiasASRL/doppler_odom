@@ -42,17 +42,17 @@ class Odometry {
     std::string debug_path = "/tmp/";
   };
 
-  static Odometry::Ptr Get(const std::string &odometry, const Options &options) {
+  static Odometry::Ptr Get(const std::string& odometry, const Options& options) {
     return name2Ctor().at(odometry)(options);
   }
 
-  Odometry(const Options &options) : options_(options) {}
+  Odometry() = default;
   virtual ~Odometry() = default;
 
   // register new frame for odometry
-  virtual void solveFrame(const Pointcloud &frame, const std::vector<Eigen::MatrixXd> &gyro) = 0;
-  virtual Pointcloud preprocessFrame(Pointcloud &frame, const double& start_time, const double& end_time) = 0;
-  virtual Pointcloud ransacFrame(const Pointcloud &frame) = 0;
+  virtual void solveFrame(const Pointcloud& frame, const std::vector<Eigen::MatrixXd>& gyro) = 0;
+  virtual Pointcloud preprocessFrame(Pointcloud& frame, double start_time, double end_time) = 0;
+  virtual Pointcloud ransacFrame(const Pointcloud& frame) = 0;
   virtual Eigen::Matrix4d integrateForPose() = 0;
   virtual std::vector<double> getLatestFrameTimes() = 0;
 
@@ -89,8 +89,6 @@ class Odometry {
   std::vector<Eigen::Matrix4d> poses_;
 
  private:
-  const Options options_;
-
   using CtorFunc = std::function<Ptr(const Options &)>;
   using Name2Ctor = std::unordered_map<std::string, CtorFunc>;
   static Name2Ctor &name2Ctor() {
