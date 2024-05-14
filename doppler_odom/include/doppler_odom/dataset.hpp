@@ -58,8 +58,14 @@ class Dataset {
     std::vector<bool> active_sensors;
   };
 
+  // get dataset constructor
   static Dataset::Ptr Get(const std::string &dataset, const Options &options) {
     return name2Ctor().at(dataset)(options);
+  }
+
+  // get dataset options constructor
+  static Dataset::Options::Ptr GetOptions(const std::string &dataset) {
+    return name2OpnCtor().at(dataset)();
   }
 
   Dataset() = default;
@@ -69,11 +75,20 @@ class Dataset {
   virtual Sequence::Ptr next() = 0;
 
  private:
+  // name-to-constructor for Dataset
   using CtorFunc = std::function<Ptr(const Options &)>;
   using Name2Ctor = std::unordered_map<std::string, CtorFunc>;
   static Name2Ctor &name2Ctor() {
     static Name2Ctor name2ctor;
     return name2ctor;
+  }
+
+  // name-to-constructor for Dataset::Options
+  using OpnCtorFunc = std::function<Options::Ptr()>;
+  using Name2OpnCtor = std::unordered_map<std::string, OpnCtorFunc>;
+  static Name2OpnCtor &name2OpnCtor() {
+    static Name2OpnCtor name2opnctor;
+    return name2opnctor;
   }
 
   template <typename T>
@@ -83,9 +98,18 @@ class Dataset {
 template <typename T>
 struct DatasetRegister {
   DatasetRegister() {
+    // for dataset
     bool success = Dataset::name2Ctor()
                        .try_emplace(T::dataset_name_, Dataset::CtorFunc([](const Dataset::Options &options) {
                                       return std::make_shared<T>(dynamic_cast<const typename T::Options&>(options));
+                                    }))
+                       .second;
+    if (!success) throw std::runtime_error{"DatasetRegister failed - duplicated name"};
+
+    // for dataset options
+    success = Dataset::name2OpnCtor()
+                       .try_emplace(T::dataset_name_, Dataset::OpnCtorFunc([]() {
+                                      return std::make_shared<typename T::Options>();
                                     }))
                        .second;
     if (!success) throw std::runtime_error{"DatasetRegister failed - duplicated name"};

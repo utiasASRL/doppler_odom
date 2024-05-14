@@ -29,12 +29,7 @@ doppler_odom::OdomOptions loadOptions(const YAML::Node& config) {
   options.odometry = config["odometry"].as<std::string>();
 
   // dataset
-  if (options.dataset == "boreas_aeva")
-    options.dataset_options = std::make_shared<BoreasAevaDataset::Options>();
-  else if (options.dataset == "aevahq")
-    options.dataset_options = std::make_shared<AevaHQDataset::Options>();
-  else
-    throw std::invalid_argument{"Unknown dataset!"};
+  options.dataset_options = Dataset::GetOptions(options.dataset);
   auto& dataset_options = *options.dataset_options;
   dataset_options.all_sequences = config["dataset_options"]["all_sequences"].as<bool>();
   dataset_options.root_path = config["dataset_options"]["root_path"].as<std::string>();
