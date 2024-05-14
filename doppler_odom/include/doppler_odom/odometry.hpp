@@ -42,8 +42,14 @@ class Odometry {
     std::string debug_path = "/tmp/";
   };
 
+  // get odometry constructor
   static Odometry::Ptr Get(const std::string& odometry, const Options& options) {
     return name2Ctor().at(odometry)(options);
+  }
+
+  // get odometry options constructor
+  static Odometry::Options::Ptr GetOptions(const std::string &odometry) {
+    return name2OpnCtor().at(odometry)();
   }
 
   Odometry() = default;
@@ -89,11 +95,20 @@ class Odometry {
   std::vector<Eigen::Matrix4d> poses_;
 
  private:
+  // name-to-constructor for Odometry
   using CtorFunc = std::function<Ptr(const Options&)>;
   using Name2Ctor = std::unordered_map<std::string, CtorFunc>;
   static Name2Ctor &name2Ctor() {
     static Name2Ctor name2ctor;
     return name2ctor;
+  }
+
+  // name-to-constructor for Odometry::Options
+  using OpnCtorFunc = std::function<Options::Ptr()>;
+  using Name2OpnCtor = std::unordered_map<std::string, OpnCtorFunc>;
+  static Name2OpnCtor &name2OpnCtor() {
+    static Name2OpnCtor name2opnctor;
+    return name2opnctor;
   }
 
   template <typename T>
@@ -103,9 +118,18 @@ class Odometry {
 template <typename T>
 struct OdometryRegister {
   OdometryRegister() {
+    // for odometry
     bool success = Odometry::name2Ctor()
                        .try_emplace(T::odometry_name_, Odometry::CtorFunc([](const Odometry::Options& options) {
                                       return std::make_shared<T>(dynamic_cast<const typename T::Options&>(options));
+                                    }))
+                       .second;
+    if (!success) throw std::runtime_error{"OdometryRegister failed - duplicated name"};
+
+    // for odometry options
+    success = Odometry::name2OpnCtor()
+                       .try_emplace(T::odometry_name_, Odometry::OpnCtorFunc([]() {
+                                      return std::make_shared<typename T::Options>();
                                     }))
                        .second;
     if (!success) throw std::runtime_error{"OdometryRegister failed - duplicated name"};

@@ -40,10 +40,7 @@ doppler_odom::OdomOptions loadOptions(const YAML::Node& config) {
   dataset_options.active_sensors = active_sensors;
 
   // odometry
-  if (options.odometry == "doppler_filter")
-    options.odometry_options = std::make_shared<DopplerFilter::Options>();
-  else
-    throw std::invalid_argument{"Unknown odometry type!"};
+  options.odometry_options = Odometry::GetOptions(options.odometry);
   auto& odometry_options = *options.odometry_options;
 
   odometry_options.debug_path = config["log_dir"].as<std::string>();
