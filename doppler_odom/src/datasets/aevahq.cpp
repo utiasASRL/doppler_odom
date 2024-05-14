@@ -76,7 +76,14 @@ Pointcloud readPointCloud(const std::string& path, double time_delta_sec, int se
 
 }  // namespace
 
-AevaHQSequence::AevaHQSequence(const Options &options) : Sequence(options) {
+Sequence::Ptr AevaHQDataset::next() {
+  if (!hasNext()) return nullptr;
+  AevaHQDataset::Options options(options_);
+  options.sequence = sequences_[next_sequence_++];
+  return std::make_shared<AevaHQSequence>(options);
+}
+
+AevaHQSequence::AevaHQSequence(const AevaHQDataset::Options& options) : options_(options) {
   // we will always index in this order:
   // 0: front-facing sensor, 1: left-facing sensor, 2: right-facing sensor, 3: back-facing sensor
   dir_path_[0] = options_.root_path + "/" + options_.sequence + "/front_4320/";

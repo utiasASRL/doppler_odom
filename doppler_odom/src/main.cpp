@@ -16,7 +16,7 @@ namespace doppler_odom {
 // Parameters to run the odometry
 struct OdomOptions {
   std::string dataset;
-  Dataset::Options dataset_options;
+  Dataset::Options::Ptr dataset_options;
 
   std::string odometry;
   Odometry::Options::Ptr odometry_options;
@@ -29,7 +29,13 @@ doppler_odom::OdomOptions loadOptions(const YAML::Node& config) {
   options.odometry = config["odometry"].as<std::string>();
 
   // dataset
-  auto& dataset_options = options.dataset_options;
+  if (options.dataset == "boreas_aeva")
+    options.dataset_options = std::make_shared<BoreasAevaDataset::Options>();
+  else if (options.dataset == "aevahq")
+    options.dataset_options = std::make_shared<AevaHQDataset::Options>();
+  else
+    throw std::invalid_argument{"Unknown dataset!"};
+  auto& dataset_options = *options.dataset_options;
   dataset_options.all_sequences = config["dataset_options"]["all_sequences"].as<bool>();
   dataset_options.root_path = config["dataset_options"]["root_path"].as<std::string>();
   dataset_options.sequence = config["dataset_options"]["sequence"] .as<std::string>();
@@ -114,7 +120,7 @@ int main(int argc, char** argv) {
   const auto options = loadOptions(config);
 
   // get dataset
-  const auto dataset = Dataset::Get(options.dataset, options.dataset_options);
+  const auto dataset = Dataset::Get(options.dataset, *options.dataset_options);
 
   // loop through sequences
   while (auto seq = dataset->next()) {

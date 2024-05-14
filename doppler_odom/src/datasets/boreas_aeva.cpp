@@ -138,7 +138,14 @@ Pointcloud readPointCloud(const std::string &path, const double &time_delta_sec,
 
 }  // namespace
 
-BoreasAevaSequence::BoreasAevaSequence(const Options &options) : Sequence(options) {
+Sequence::Ptr BoreasAevaDataset::next() {
+  if (!hasNext()) return nullptr;
+  BoreasAevaDataset::Options options(options_);
+  options.sequence = sequences_[next_sequence_++];
+  return std::make_shared<BoreasAevaSequence>(options);
+}
+
+BoreasAevaSequence::BoreasAevaSequence(const BoreasAevaDataset::Options& options) : options_(options) {
   dir_path_ = options_.root_path + "/" + options_.sequence + "/aeva/";
   auto dir_iter = std::filesystem::directory_iterator(dir_path_);
   last_frame_ = std::count_if(begin(dir_iter), end(dir_iter), [this](auto &entry) {

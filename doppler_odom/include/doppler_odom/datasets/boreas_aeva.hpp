@@ -4,35 +4,13 @@
 
 namespace doppler_odom {
 
-class BoreasAevaSequence : public Sequence {
- public:
-  BoreasAevaSequence(const Options& options);
-
-  int currFrame() const override { return curr_frame_; }
-  int numFrames() const override { return last_frame_ - init_frame_; }
-  bool hasNext() const override { return curr_frame_ < last_frame_; }
-  Pointcloud next(double& start_time, double& end_time) override;
-  std::vector<Eigen::MatrixXd> next_gyro(const double& start_time, const double& end_time) override;
-
-  bool hasGroundTruth() const override { return false; }  // TODO
-
-  void save(const std::string &path, const Trajectory &trajectory, const std::vector<Eigen::Matrix4d> &poses) const override;
-
- private:
-  std::string dir_path_;
-  std::vector<std::string> filenames_;
-  int64_t initial_timestamp_micro_;
-  int init_frame_ = 0;
-  int curr_frame_ = 0;
-  int last_frame_ = std::numeric_limits<int>::max();  // exclusive bound
-
-  // gyro measurements
-  std::vector<Eigen::MatrixXd> gyro_data_;
-};
-
 class BoreasAevaDataset : public Dataset {
  public:
-  BoreasAevaDataset(const Options& options) : Dataset(options) {
+  struct Options : public Dataset::Options{
+    // BoreasAevaDataset specific options
+  };
+
+  BoreasAevaDataset(const Options& options) : options_(options) {
     if (options_.all_sequences)
       sequences_ = SEQUENCES;
     else
@@ -40,14 +18,10 @@ class BoreasAevaDataset : public Dataset {
   }
 
   bool hasNext() const override { return next_sequence_ < sequences_.size(); }
-  Sequence::Ptr next() override {
-    if (!hasNext()) return nullptr;
-    Sequence::Options options(options_);
-    options.sequence = sequences_[next_sequence_++];
-    return std::make_shared<BoreasAevaSequence>(options);
-  }
+  Sequence::Ptr next() override;
 
  private:
+  Options options_;
   std::vector<std::string> sequences_;
   size_t next_sequence_ = 0;
 
@@ -61,6 +35,35 @@ class BoreasAevaDataset : public Dataset {
   };
 
   DOPPLER_ODOM_REGISTER_DATASET("boreas_aeva", BoreasAevaDataset);
+};
+
+class BoreasAevaSequence : public Sequence {
+ public:
+  BoreasAevaSequence(const BoreasAevaDataset::Options& options);
+  ~BoreasAevaSequence() = default;
+
+  std::string name() const override { return options_.sequence; }
+  int currFrame() const override { return curr_frame_; }
+  int numFrames() const override { return last_frame_ - init_frame_; }
+  bool hasNext() const override { return curr_frame_ < last_frame_; }
+  Pointcloud next(double& start_time, double& end_time) override;
+  std::vector<Eigen::MatrixXd> next_gyro(const double& start_time, const double& end_time) override;
+
+  bool hasGroundTruth() const override { return false; }  // TODO
+
+  void save(const std::string &path, const Trajectory &trajectory, const std::vector<Eigen::Matrix4d> &poses) const override;
+
+ private:
+  BoreasAevaDataset::Options options_;
+  std::string dir_path_;
+  std::vector<std::string> filenames_;
+  int64_t initial_timestamp_micro_;
+  int init_frame_ = 0;
+  int curr_frame_ = 0;
+  int last_frame_ = std::numeric_limits<int>::max();  // exclusive bound
+
+  // gyro measurements
+  std::vector<Eigen::MatrixXd> gyro_data_;
 };
 
 }  // namespace doppler_odom

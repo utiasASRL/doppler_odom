@@ -17,18 +17,10 @@ class Sequence {
   using Ptr = std::shared_ptr<Sequence>;
   using ConstPtr = std::shared_ptr<const Sequence>;
 
-  struct Options {
-    std::string root_path;
-    std::string sequence;
-    int init_frame = 0;
-    int last_frame = std::numeric_limits<int>::max();  // exclusive bound
-    std::vector<bool> active_sensors;
-  };
-
-  Sequence(const Options &options) : options_(options) {}
+  Sequence() = default;
   virtual ~Sequence() = default;
 
-  std::string name() const { return options_.sequence; }
+  virtual std::string name() const = 0;
   virtual int currFrame() const = 0;
   virtual int numFrames() const = 0;
   virtual void setInitFrame(int /* frame_index */) {
@@ -45,9 +37,6 @@ class Sequence {
   virtual void save(const std::string& path, const Trajectory& trajectory, const std::vector<Eigen::Matrix4d>& poses) const = 0;
 
   virtual std::vector<Eigen::MatrixXd> next_gyro(const double& start_time, const double& end_time) = 0;
-
- protected:
-  const Options options_;
 };
 
 class Dataset {
@@ -55,22 +44,29 @@ class Dataset {
   using Ptr = std::shared_ptr<Dataset>;
   using ConstPtr = std::shared_ptr<const Dataset>;
 
-  struct Options : public Sequence::Options {
+  struct Options {
+    using Ptr = std::shared_ptr<Options>;
+    using ConstPtr = std::shared_ptr<const Options>;
+
+    virtual ~Options() = default;
+
     bool all_sequences = false;
+    std::string sequence;
+    std::string root_path;
+    int init_frame = 0;
+    int last_frame = std::numeric_limits<int>::max();  // exclusive bound
+    std::vector<bool> active_sensors;
   };
 
   static Dataset::Ptr Get(const std::string &dataset, const Options &options) {
     return name2Ctor().at(dataset)(options);
   }
 
-  Dataset(const Options &options) : options_(options) {}
+  Dataset() = default;
   virtual ~Dataset() = default;
 
   virtual bool hasNext() const = 0;
   virtual Sequence::Ptr next() = 0;
-
- protected:
-  const Options options_;
 
  private:
   using CtorFunc = std::function<Ptr(const Options &)>;
@@ -89,7 +85,7 @@ struct DatasetRegister {
   DatasetRegister() {
     bool success = Dataset::name2Ctor()
                        .try_emplace(T::dataset_name_, Dataset::CtorFunc([](const Dataset::Options &options) {
-                                      return std::make_shared<T>(options);
+                                      return std::make_shared<T>(dynamic_cast<const typename T::Options&>(options));
                                     }))
                        .second;
     if (!success) throw std::runtime_error{"DatasetRegister failed - duplicated name"};

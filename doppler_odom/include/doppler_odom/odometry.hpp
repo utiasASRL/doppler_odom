@@ -89,7 +89,7 @@ class Odometry {
   std::vector<Eigen::Matrix4d> poses_;
 
  private:
-  using CtorFunc = std::function<Ptr(const Options &)>;
+  using CtorFunc = std::function<Ptr(const Options&)>;
   using Name2Ctor = std::unordered_map<std::string, CtorFunc>;
   static Name2Ctor &name2Ctor() {
     static Name2Ctor name2ctor;
@@ -104,8 +104,8 @@ template <typename T>
 struct OdometryRegister {
   OdometryRegister() {
     bool success = Odometry::name2Ctor()
-                       .try_emplace(T::odometry_name_, Odometry::CtorFunc([](const Odometry::Options &options) {
-                                      return std::make_shared<T>(dynamic_cast<const typename T::Options &>(options));
+                       .try_emplace(T::odometry_name_, Odometry::CtorFunc([](const Odometry::Options& options) {
+                                      return std::make_shared<T>(dynamic_cast<const typename T::Options&>(options));
                                     }))
                        .second;
     if (!success) throw std::runtime_error{"OdometryRegister failed - duplicated name"};
