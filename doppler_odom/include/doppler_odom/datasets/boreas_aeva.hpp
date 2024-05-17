@@ -10,6 +10,7 @@ class BoreasAevaDataset : public Dataset {
   struct Options : public Dataset::Options{
     // BoreasAevaDataset-specific options
     DopplerImageCalib::Options dcalib_options;
+    std::string path_to_elevation_order;
     
     // set parameters from yaml
     void setParamsFromYaml(const YAML::Node& config) override {
@@ -18,6 +19,7 @@ class BoreasAevaDataset : public Dataset {
 
       // set child parameters
       dcalib_options.setParamsFromYaml(config);
+      path_to_elevation_order = config["doppler_options"]["root_path"].as<std::string>();
     }
   };
 
@@ -72,6 +74,11 @@ class BoreasAevaSequence : public Sequence {
   int init_frame_ = 0;
   int curr_frame_ = 0;
   int last_frame_ = std::numeric_limits<int>::max();  // exclusive bound
+
+  // for computing line id from elevation
+  // std::vector<std::vector<Eigen::MatrixXd>> elevation_order_by_beam_id_;
+  std::vector<Eigen::MatrixXd> elevation_order_by_beam_id_;
+  void loadElevationOrder();
 
   // calib
   DopplerImageCalib::ConstPtr doppler_image_calib_;

@@ -170,6 +170,9 @@ BoreasAevaSequence::BoreasAevaSequence(const BoreasAevaDataset::Options& options
   // Doppler image space calibration
   options_.dcalib_options.active_sensors = options_.active_sensors;
   doppler_image_calib_ = std::make_shared<DopplerImageCalib>(options_.dcalib_options);
+
+  // elevation order
+  loadElevationOrder();
 }
 
 // load next lidar frame (also return start and end times of frame)
@@ -223,6 +226,28 @@ std::vector<Eigen::MatrixXd> BoreasAevaSequence::nextGyro(const double& start_ti
 
 // dataset-specific data preprocessing (e.g., downsampling, Doppler bias calibration, etc.)
 Pointcloud BoreasAevaSequence::preprocessFrame(Pointcloud& frame, double start_time, double end_time) {
+  // compute line id (i.e., row)
+  for (auto& point : frame) {
+    // compute elevation
+    const double xy = sqrt(point.pt[0]*point.pt[0] + point.pt[1]*point.pt[1]);
+    const double elevation = atan2_approx(point.pt[2], xy);
+    
+    // determine row by matching by beam_id (0, 1, 2, or 3) and closest elevation to precalculated values
+    // note: elevation_order_by_beam_id_[point.beam_id] first column is mean elevation, second column is row id
+    const auto ele_diff = elevation_order_by_beam_id_[point.beam_id].col(0).array() - elevation;
+    double min_val = ele_diff(0)*ele_diff(0);
+    size_t min_id = 0;
+    for (size_t i = 1; i < ele_diff.rows(); ++i) {
+      const auto val = ele_diff(i) * ele_diff(i);
+      if (val < min_val) {
+        min_val = val;
+        min_id = i;
+      }
+    }
+
+    point.line_id = elevation_order_by_beam_id_[point.beam_id](min_id, 1);
+  }
+
   // image space calibration
   // TODO: remove min max range
   Pointcloud keypoint_frame = doppler_image_calib_->calib_frame(frame, 20.0, 150.0);  // downsamples into image and runs regression
@@ -252,6 +277,33 @@ void BoreasAevaSequence::save(const std::string& path, const Trajectory& traject
       << " " << poses[i](2,0) << " " << poses[i](2,1) << " " << poses[i](2,2) << " " << poses[i](2,3)
       << " " << poses[i](3,0) << " " << poses[i](3,1) << " " << poses[i](3,2) << " " << poses[i](3,3) << std::endl;
   }
+}
+
+// load values for computing line id from elevation
+void BoreasAevaSequence::loadElevationOrder() {
+  elevation_order_by_beam_id_.clear();
+
+  // read elevation settings
+  std::string path = options_.path_to_elevation_order + "/mean_elevation_beam_order_0";
+  std::ifstream csv(path);
+  if (!csv) throw std::ios::failure("Error opening csv file");
+  Eigen::MatrixXd elevation_order = readCSVtoEigenXd(csv);
+
+  for (int j = 0; j < 4; ++j) {   // 4 beams   
+    Eigen::MatrixXd elevation_order_for_this_beam(elevation_order.rows()/4, 2);  // first column is mean elevation, second column is row id
+    int h = 0;
+    for (int r = 0; r < elevation_order.rows(); ++r) {
+      // first column is mean elevation. Second column is beam id
+      if (elevation_order(r, 1) == j) {
+        elevation_order_for_this_beam(h, 0) = elevation_order(r, 0);
+        elevation_order_for_this_beam(h, 1) = r;
+        ++h;
+      }
+    } // end for r
+    assert(h == elevation_order.rows()/4);
+    elevation_order_by_beam_id_.push_back(elevation_order_for_this_beam);
+  } // end for j
+  assert(elevation_order_by_beam_id_.size() == 4); // 4 beams
 }
 
 }  // namespace doppler_odom

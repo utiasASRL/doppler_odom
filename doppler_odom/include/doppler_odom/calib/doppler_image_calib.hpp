@@ -42,8 +42,6 @@ class DopplerImageCalib {
 
  protected:
   const Options options_;
-  std::vector<Eigen::MatrixXd> elevation_order_;
-  std::vector<std::vector<Eigen::MatrixXd>> elevation_order_by_beam_id_;
 
   // TODO: load different calibration models
   std::vector<std::vector<Eigen::MatrixXd>> weights_;
