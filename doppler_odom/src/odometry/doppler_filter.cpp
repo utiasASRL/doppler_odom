@@ -43,9 +43,6 @@ DopplerFilter::DopplerFilter(const Options& options) : options_(options) {
   gyro_invcov_[0](0,0) = 1.0/(2.9e-4);
   gyro_invcov_[0](1,1) = 1.0/(4.7e-4);
   gyro_invcov_[0](2,2) = 1.0/(3.4e-5);
-
-  // Doppler calib
-  doppler_calib_ = std::make_shared<DopplerCalib>(options_.dcalib_options);
 }
 
 DopplerFilter::~DopplerFilter() {
@@ -82,10 +79,19 @@ Pointcloud DopplerFilter::preprocessFrame(Pointcloud& frame, double start_time, 
   trajectory_[index_frame].end_timestamp = end_time;
   LOG(INFO) << trajectory_.back().begin_timestamp << ", " <<  trajectory_.back().end_timestamp << std::endl;
 
-  // downsample
-  Pointcloud keypoint_frame = doppler_calib_->calib_frame(frame, options_.min_dist, 150.0);  // downsamples into image and runs regression
+  // downsample by step and range
+  Pointcloud output;
+  output.reserve(frame.size() / options_.downsample_steps);
+  for (size_t i = 0; i < frame.size(); i += options_.downsample_steps) {
+    auto& point = frame[i];
+    point.range = sqrt(point.pt[0]*point.pt[0] + point.pt[1]*point.pt[1] + point.pt[2]*point.pt[2]);
+    if (point.range < options_.min_dist || point.range > options_.max_dist)
+      continue;
 
-  return keypoint_frame;
+    output.push_back(point);
+  }
+
+  return output;
 }
 
 Pointcloud DopplerFilter::ransacFrame(const Pointcloud& const_frame) {

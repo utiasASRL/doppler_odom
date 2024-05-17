@@ -150,6 +150,7 @@ AevaHQSequence::AevaHQSequence(const AevaHQDataset::Options& options) : options_
   initial_timestamp_micro_ = std::stoll(filenames_[0][init_frame_[0]].substr(0, filenames_[0][init_frame_[0]].find(".")));
 }
 
+// load next lidar frame from (possibly) multiple sensors (also return start and end times of frame)
 Pointcloud AevaHQSequence::next(double& start_time, double& end_time) {
   if (!hasNext()) throw std::runtime_error("No more frames in sequence");
 
@@ -180,9 +181,17 @@ Pointcloud AevaHQSequence::next(double& start_time, double& end_time) {
   return output_frame;
 }
 
-std::vector<Eigen::MatrixXd> AevaHQSequence::next_gyro(const double& start_time, const double& end_time) {
+// load gyro data between start_time and end_time
+std::vector<Eigen::MatrixXd> AevaHQSequence::nextGyro(const double& start_time, const double& end_time) {
+  // TODO
   std::vector<Eigen::MatrixXd> output;
   return output;
+}
+
+// dataset-specific data preprocessing (e.g., downsampling, Doppler bias calibration, etc.)
+Pointcloud AevaHQSequence::preprocessFrame(Pointcloud& frame, double start_time, double end_time) {
+  // do nothing
+  return frame;
 }
 
 void AevaHQSequence::save(const std::string& path, const Trajectory& trajectory, const std::vector<Eigen::Matrix4d> &poses) const {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "doppler_odom/dataset.hpp"
+#include "doppler_odom/calib/doppler_image_calib.hpp"
 
 namespace doppler_odom {
 
@@ -8,6 +9,16 @@ class AevaHQDataset : public Dataset {
  public:
   struct Options : public Dataset::Options{
     // AevaHQDataset specific options
+    DopplerImageCalib::Options dcalib_options;
+
+    // set parameters from yaml
+    void setParamsFromYaml(const YAML::Node& config) override {
+      // set base parameters
+      this->setBaseParamsFromYaml(config);
+
+      // set child parameters
+      dcalib_options.setParamsFromYaml(config);
+    }
   };
 
   AevaHQDataset(const Options& options) : options_(options) {
@@ -51,7 +62,8 @@ class AevaHQSequence : public Sequence {
   int numFrames() const override { return last_frame_[0] - init_frame_[0]; }
   bool hasNext() const override { return curr_frame_[0] < last_frame_[0]; }
   Pointcloud next(double& start_time, double& end_time) override;
-  std::vector<Eigen::MatrixXd> next_gyro(const double& start_time, const double& end_time) override;
+  std::vector<Eigen::MatrixXd> nextGyro(const double& start_time, const double& end_time) override;
+  Pointcloud preprocessFrame(Pointcloud& frame, double start_time, double end_time) override;
 
   bool hasGroundTruth() const override { return false; }  // TODO
 

@@ -1,13 +1,24 @@
 #pragma once
 
 #include "doppler_odom/dataset.hpp"
+#include "doppler_odom/calib/doppler_image_calib.hpp"
 
 namespace doppler_odom {
 
 class BoreasAevaDataset : public Dataset {
  public:
   struct Options : public Dataset::Options{
-    // BoreasAevaDataset specific options
+    // BoreasAevaDataset-specific options
+    DopplerImageCalib::Options dcalib_options;
+    
+    // set parameters from yaml
+    void setParamsFromYaml(const YAML::Node& config) override {
+      // set base parameters
+      this->setBaseParamsFromYaml(config);
+
+      // set child parameters
+      dcalib_options.setParamsFromYaml(config);
+    }
   };
 
   BoreasAevaDataset(const Options& options) : options_(options) {
@@ -47,10 +58,10 @@ class BoreasAevaSequence : public Sequence {
   int numFrames() const override { return last_frame_ - init_frame_; }
   bool hasNext() const override { return curr_frame_ < last_frame_; }
   Pointcloud next(double& start_time, double& end_time) override;
-  std::vector<Eigen::MatrixXd> next_gyro(const double& start_time, const double& end_time) override;
+  std::vector<Eigen::MatrixXd> nextGyro(const double& start_time, const double& end_time) override;
+  Pointcloud preprocessFrame(Pointcloud& frame, double start_time, double end_time) override;
 
   bool hasGroundTruth() const override { return false; }  // TODO
-
   void save(const std::string &path, const Trajectory &trajectory, const std::vector<Eigen::Matrix4d> &poses) const override;
 
  private:
@@ -61,6 +72,9 @@ class BoreasAevaSequence : public Sequence {
   int init_frame_ = 0;
   int curr_frame_ = 0;
   int last_frame_ = std::numeric_limits<int>::max();  // exclusive bound
+
+  // calib
+  DopplerImageCalib::ConstPtr doppler_image_calib_;
 
   // gyro measurements
   std::vector<Eigen::MatrixXd> gyro_data_;

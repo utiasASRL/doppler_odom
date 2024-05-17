@@ -9,7 +9,6 @@
 #include "doppler_odom/odometry/doppler_filter.hpp"
 #include "doppler_odom/point.hpp"
 #include "doppler_odom/utils/stopwatch.hpp"
-#include "doppler_odom/calib/doppler_calib.hpp"
 
 namespace doppler_odom {
 
@@ -30,14 +29,7 @@ doppler_odom::OdomOptions loadOptions(const YAML::Node& config) {
 
   // dataset
   options.dataset_options = Dataset::GetOptions(options.dataset);
-  auto& dataset_options = *options.dataset_options;
-  dataset_options.all_sequences = config["dataset_options"]["all_sequences"].as<bool>();
-  dataset_options.root_path = config["dataset_options"]["root_path"].as<std::string>();
-  dataset_options.sequence = config["dataset_options"]["sequence"] .as<std::string>();
-  dataset_options.init_frame = config["dataset_options"]["init_frame"].as<int>();
-  dataset_options.last_frame = config["dataset_options"]["last_frame"].as<int>();
-  std::vector<bool> active_sensors = config["dataset_options"]["active_sensors"].as<std::vector<bool>>();
-  dataset_options.active_sensors = active_sensors;
+  options.dataset_options->setParamsFromYaml(config);
 
   // odometry
   options.odometry_options = Odometry::GetOptions(options.odometry);
@@ -46,7 +38,7 @@ doppler_odom::OdomOptions loadOptions(const YAML::Node& config) {
   odometry_options.debug_path = config["log_dir"].as<std::string>();
 
   int num_sensors = 0;
-  for (const auto& flag : active_sensors)
+  for (const auto& flag : options.dataset_options->active_sensors)
     if (flag)
       ++num_sensors;
   odometry_options.num_sensors = num_sensors;
@@ -55,8 +47,8 @@ doppler_odom::OdomOptions loadOptions(const YAML::Node& config) {
   odometry_options.integration_steps = config["odometry_options"]["integration_steps"].as<int>();
   odometry_options.zero_vel_tol = config["odometry_options"]["zero_vel_tol"].as<double>();
 
-  odometry_options.min_dist = config["odometry_options"]["min_dist_lidar_center"].as<double>();
-  odometry_options.max_dist = config["odometry_options"]["max_dist_lidar_center"].as<double>();
+  odometry_options.min_dist = config["odometry_options"]["min_dist"].as<double>();
+  odometry_options.max_dist = config["odometry_options"]["max_dist"].as<double>();
 
   auto temp = config["odometry_options"]["P0inv"].as<std::vector<double>>();
   odometry_options.P0inv.diagonal() = Eigen::Matrix<double,6,1>(temp.data());
@@ -75,16 +67,8 @@ doppler_odom::OdomOptions loadOptions(const YAML::Node& config) {
       dfilter_options->const_gyro_bias.clear();
       for (auto& bias: temp_vec)
         dfilter_options->const_gyro_bias.push_back(Eigen::Vector3d(bias.data()));
-
-      // Doppler calib
-      auto& dcalib_options = dfilter_options->dcalib_options;
-      dcalib_options.root_path = config["doppler_options"]["root_path"].as<std::string>();
-      dcalib_options.azimuth_res = config["doppler_options"]["azimuth_res"].as<double>();
-      dcalib_options.azimuth_start = config["doppler_options"]["azimuth_start"].as<double>();
-      dcalib_options.azimuth_end = config["doppler_options"]["azimuth_end"].as<double>();
-      dcalib_options.num_rows = config["doppler_options"]["num_rows"].as<int>();
-      dcalib_options.num_cols = config["doppler_options"]["num_cols"].as<int>();
-      dcalib_options.active_sensors = active_sensors;
+      
+      dfilter_options->downsample_steps = config["odometry_options"]["downsample_steps"].as<int>();
     }
   }
 
@@ -143,18 +127,19 @@ int main(int argc, char** argv) {
 
       // preprocessing step (downsample + regression, ~3.9ms)
       timer[1].second->start();
-      const auto preprocessed_frame = odometry->preprocessFrame(frame, start_time, end_time);
+      auto odom_preprocessed_frame = odometry->preprocessFrame(frame, start_time, end_time);
+      auto seq_preprocessed_frame = seq->preprocessFrame(odom_preprocessed_frame, start_time, end_time);
       timer[1].second->stop();
 
       // load gyro measurements that overlap with latest lidar frame (~0.1ms, not counted towards time in paper)
       timer[2].second->start();
       auto frame_times = odometry->getLatestFrameTimes();
-      auto gyro = seq->next_gyro(frame_times[0], frame_times[1]);
+      auto gyro = seq->nextGyro(frame_times[0], frame_times[1]);
       timer[2].second->stop();
 
       // ransac (~1.1ms)
       timer[3].second->start();
-      const auto ransac_frame = odometry->ransacFrame(preprocessed_frame);
+      const auto ransac_frame = odometry->ransacFrame(seq_preprocessed_frame);
       timer[3].second->stop();
 
       // estimate latest velocity (~0.5ms)

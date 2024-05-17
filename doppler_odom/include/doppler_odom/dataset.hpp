@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "yaml-cpp/yaml.h"
 #include "doppler_odom/point.hpp"
 #include "doppler_odom/trajectory.hpp"
 
@@ -28,15 +29,15 @@ class Sequence {
   };
   virtual bool hasNext() const = 0;
   virtual Pointcloud next(double& start_time, double& end_time) = 0;
-  virtual bool withRandomAccess() const { return false; }
+  // virtual bool withRandomAccess() const { return false; }
   virtual std::vector<Point3D> frame(size_t /* index */) const {
     throw std::runtime_error("random access not supported");
   }
+  virtual std::vector<Eigen::MatrixXd> nextGyro(const double& start_time, const double& end_time) = 0;
+  virtual Pointcloud preprocessFrame(Pointcloud& frame, double start_time, double end_time) = 0;
 
   virtual bool hasGroundTruth() const { return false; }
   virtual void save(const std::string& path, const Trajectory& trajectory, const std::vector<Eigen::Matrix4d>& poses) const = 0;
-
-  virtual std::vector<Eigen::MatrixXd> next_gyro(const double& start_time, const double& end_time) = 0;
 };
 
 class Dataset {
@@ -56,6 +57,19 @@ class Dataset {
     int init_frame = 0;
     int last_frame = std::numeric_limits<int>::max();  // exclusive bound
     std::vector<bool> active_sensors;
+
+    // set base parameters from yaml
+    void setBaseParamsFromYaml(const YAML::Node& config) {
+      this->all_sequences = config["dataset_options"]["all_sequences"].as<bool>();
+      this->root_path = config["dataset_options"]["root_path"].as<std::string>();
+      this->sequence = config["dataset_options"]["sequence"] .as<std::string>();
+      this->init_frame = config["dataset_options"]["init_frame"].as<int>();
+      this->last_frame = config["dataset_options"]["last_frame"].as<int>();
+      this->active_sensors = config["dataset_options"]["active_sensors"].as<std::vector<bool>>();
+    }
+
+    // set parameters from yaml (calls setBaseParamsFromYaml)
+    virtual void setParamsFromYaml(const YAML::Node& config) = 0;
   };
 
   // get dataset constructor

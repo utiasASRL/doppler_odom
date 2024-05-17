@@ -25,13 +25,16 @@ odometry: "doppler_filter"
 odometry_options:
   ransac_max_iter: 20
   ransac_thres: 0.2
-  min_dist_lidar_center: 20.0 
-  max_dist_lidar_center: 150.0 
+  min_dist: 20.0 
+  max_dist: 150.0 
   integration_steps: 100
   zero_vel_tol: 0.03
   P0inv: [1e6, 1e6, 1e6, 1e8, 1e8, 1e8]
   Qkinv: [124.097194, 852.430330017, 448.704299478, 1128.19639192, 1230.02908934, 11316.9459369]
   Qzinv: [0.0, 0.0, 0.0, 14274.3037743, 11121.0286591, 0.0]
   const_gyro_bias: [[-0.004580390732042348, -0.015914139544965403, 0.002919723147493117]]
+
+  # filter-specific
+  downsample_steps: 2
   
 

@@ -166,8 +166,13 @@ BoreasAevaSequence::BoreasAevaSequence(const BoreasAevaDataset::Options& options
   gyro_data_.push_back(readBoreasGyroToEigenXd(gyro_path, initial_timestamp_micro_));
   LOG(INFO) << "Loaded gyro data " << ". Matrix " 
       << gyro_data_.back().rows() << " x " << gyro_data_.back().cols() << std::endl;
+
+  // Doppler image space calibration
+  options_.dcalib_options.active_sensors = options_.active_sensors;
+  doppler_image_calib_ = std::make_shared<DopplerImageCalib>(options_.dcalib_options);
 }
 
+// load next lidar frame (also return start and end times of frame)
 Pointcloud BoreasAevaSequence::next(double& start_time, double& end_time) {
   if (!hasNext()) throw std::runtime_error("No more frames in sequence");
   int curr_frame = curr_frame_++;
@@ -184,7 +189,8 @@ Pointcloud BoreasAevaSequence::next(double& start_time, double& end_time) {
   return frame;
 }
 
-std::vector<Eigen::MatrixXd> BoreasAevaSequence::next_gyro(const double& start_time, const double& end_time) {
+// load gyro data between start_time and end_time
+std::vector<Eigen::MatrixXd> BoreasAevaSequence::nextGyro(const double& start_time, const double& end_time) {
   // double dt = 0.0;
   double dt = 0.1;
   std::vector<Eigen::MatrixXd> output;
@@ -213,6 +219,14 @@ std::vector<Eigen::MatrixXd> BoreasAevaSequence::next_gyro(const double& start_t
       << ". Start time: " << output.back()(0, 0) << ", " << "end time: " << output.back()(inds.size()-1, 0) << std::endl;
   } // end for sensorid
   return output;
+}
+
+// dataset-specific data preprocessing (e.g., downsampling, Doppler bias calibration, etc.)
+Pointcloud BoreasAevaSequence::preprocessFrame(Pointcloud& frame, double start_time, double end_time) {
+  // image space calibration
+  // TODO: remove min max range
+  Pointcloud keypoint_frame = doppler_image_calib_->calib_frame(frame, 20.0, 150.0);  // downsamples into image and runs regression
+  return keypoint_frame;
 }
 
 void BoreasAevaSequence::save(const std::string& path, const Trajectory& trajectory, const std::vector<Eigen::Matrix4d> &poses) const {
