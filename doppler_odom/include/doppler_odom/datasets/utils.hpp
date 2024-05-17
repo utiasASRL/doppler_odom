@@ -12,6 +12,8 @@ Eigen::MatrixXd readBoreasGyroToEigenXd(const std::string &file_path, const int6
 
 bool filecomp(std::string file1, std::string file2);
 
+float atan2_approx(float y, float x);
+
 // Sequence::SeqError evaluateOdometry(const std::string &filename, const ArrayPoses &poses_gt, const ArrayPoses &poses_estimated);
 
 }  // namespace doppler_odom

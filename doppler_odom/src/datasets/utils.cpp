@@ -218,4 +218,25 @@ bool filecomp (std::string file1, std::string file2) {
   return (i<j); 
 }
 
+float atan2_approx(float y, float x) {
+  static float pi = static_cast<float>(M_PI);
+  static float pi_2 = static_cast<float>(M_PI_2);
+
+  bool swap = fabs(x) < fabs(y);
+  float atanin = (swap ? x : y) / (swap ? y : x);
+  float a1 = 0.99997726;
+  float a3 = -0.33262347;
+  float a5 = 0.19354346;
+  float a7 = -0.11643287;
+  float a9 = 0.05265332;
+  float a11 = -0.01172120;
+  float atanin2 = atanin*atanin;
+  float atanout = atanin * (a1 + atanin2 * (a3 + atanin2 * (a5 + atanin2 * (a7 + atanin2 * (a9 + atanin2 * a11)))));
+  atanout = swap ? (atanin >= 0.0 ? pi_2 : -pi_2) - atanout : atanout;
+  if (x < 0.0) {
+    atanout = (y >= 0.0 ? pi : -pi) + atanout;
+  }  
+  return atanout;
+}
+
 }  // namespace doppler_odom
