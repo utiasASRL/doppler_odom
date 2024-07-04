@@ -26,7 +26,7 @@ class Odometry {
     // ransac options
     int ransac_max_iter = 20;
     double ransac_thres = 0.3;
-    double ransac_min_range = 20.0;
+    double ransac_min_dist = 20.0;
 
     // integration
     int integration_steps = 100;
@@ -72,10 +72,12 @@ class Odometry {
 
  protected:
   // precomputed measurement model (to avoid repeated calculations in RANSAC and main solve)
+  // TODO: move to filter child class
   Eigen::Matrix<double,Eigen::Dynamic,6> ransac_precompute_;
   Eigen::Matrix<double,Eigen::Dynamic,1> meas_precompute_;
   Eigen::Matrix<double,Eigen::Dynamic,1> alpha_precompute_;
   Eigen::Matrix<double,Eigen::Dynamic,1> malpha_precompute_;
+  Eigen::Matrix<double,Eigen::Dynamic,1> ivariance_precompute_;
   // std::vector<bool> sensor_active_;
 
   Eigen::Matrix<double, 6, 6> last_lhs_;

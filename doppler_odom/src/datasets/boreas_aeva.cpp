@@ -107,7 +107,7 @@ Pointcloud readPointCloud(const std::string &path, const double &time_delta_sec,
     new_point.pt[2] = getFloatFromByteArray(buffer.data(), bufpos + offset * float_offset);
 
     ++offset;
-    // intensity skipped
+    new_point.intensity = getFloatFromByteArray(buffer.data(), bufpos + offset * float_offset);
     ++offset;
     new_point.radial_velocity = getFloatFromByteArray(buffer.data(), bufpos + offset * float_offset);
     ++offset;
@@ -231,6 +231,7 @@ Pointcloud BoreasAevaSequence::preprocessFrame(Pointcloud& frame, double start_t
     // compute elevation
     const double xy = sqrt(point.pt[0]*point.pt[0] + point.pt[1]*point.pt[1]);
     const double elevation = atan2_approx(point.pt[2], xy);
+    // const double elevation = atan2(point.pt[2], xy);
     
     // determine row by matching by beam_id (0, 1, 2, or 3) and closest elevation to precalculated values
     // note: elevation_order_by_beam_id_[point.beam_id] first column is mean elevation, second column is row id

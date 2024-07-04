@@ -40,9 +40,9 @@ DopplerFilter::DopplerFilter(const Options& options) : options_(options) {
   // gyro noise
   gyro_invcov_.resize(options_.num_sensors);
   gyro_invcov_[0] = Eigen::Matrix3d::Identity();
-  gyro_invcov_[0](0,0) = 1.0/(2.9e-4);
-  gyro_invcov_[0](1,1) = 1.0/(4.7e-4);
-  gyro_invcov_[0](2,2) = 1.0/(3.4e-5);
+  gyro_invcov_[0](0,0) = 1.0/(2.9e-4) * 2;
+  gyro_invcov_[0](1,1) = 1.0/(4.7e-4) * 2;
+  gyro_invcov_[0](2,2) = 1.0/(3.4e-5) * 2;
 }
 
 DopplerFilter::~DopplerFilter() {
@@ -131,12 +131,12 @@ Pointcloud DopplerFilter::ransacFrame(const Pointcloud& const_frame) {
     int sample1, sample2;
     for (int k = 0; k < 1e3; ++k) { // 1e3 is safety measure to prevent infinite loop
       sample1 = uni_dist(random_engine_);
-      if (const_frame[sample1].range > options_.ransac_min_range)
+      if (const_frame[sample1].range > options_.ransac_min_dist)
         break;
     }
     for (int k = 0; k < 1e3; ++k) { // 1e3 is safety measure to prevent infinite loop
       sample2 = uni_dist(random_engine_);
-      if (const_frame[sample2].range > options_.ransac_min_range)
+      if (const_frame[sample2].range > options_.ransac_min_dist)
         break;
     }
 
@@ -180,7 +180,6 @@ Pointcloud DopplerFilter::ransacFrame(const Pointcloud& const_frame) {
       best_inliers = inliers;
     }
   }
-  // std::cout << best_varpi.transpose() << std::endl;   // for debugging
 
   // create new frame with only inliers
   Pointcloud inlier_frame;
@@ -191,6 +190,7 @@ Pointcloud DopplerFilter::ransacFrame(const Pointcloud& const_frame) {
   meas_precompute_ = Eigen::Matrix<double, Eigen::Dynamic, 1>(max_inliers);
   alpha_precompute_ = Eigen::Matrix<double, Eigen::Dynamic, 1>(max_inliers);
   malpha_precompute_ = Eigen::Matrix<double, Eigen::Dynamic, 1>(max_inliers);
+  ivariance_precompute_ = Eigen::Matrix<double, Eigen::Dynamic, 1>(max_inliers);
 
   // loop over each measurement
   int k = 0;
@@ -204,6 +204,7 @@ Pointcloud DopplerFilter::ransacFrame(const Pointcloud& const_frame) {
     alpha_precompute_[k] = std::min(1.0, std::max(0.0, (const_frame[i].timestamp - trajectory_.back().begin_timestamp) / 
         (trajectory_.back().end_timestamp - trajectory_.back().begin_timestamp)));
     malpha_precompute_[k] = std::max(0.0, 1.0 - alpha_precompute_[k]);
+    ivariance_precompute_[k] = const_frame[i].ivariance;
     ++k;
   }
 
@@ -257,8 +258,16 @@ void DopplerFilter::solveFrame(const Pointcloud& const_frame, const std::vector<
   Eigen::Matrix<double, Eigen::Dynamic, 12> G(const_frame.size(), 12); // N x 12
   G.leftCols<6>() = ransac_precompute_.array().colwise() * malpha_precompute_.array();
   G.rightCols<6>() = ransac_precompute_.array().colwise() * alpha_precompute_.array();
-  lhs += G.transpose() * G / (0.2*0.2);   // TODO: add variance as parameter
-  rhs += G.transpose() * meas_precompute_ / (0.2*0.2);
+  // // lhs += G.transpose() * G / (1.0*1.0);   // TODO: add variance as parameter
+  // // rhs += G.transpose() * meas_precompute_ / (1.0*1.0);
+  // lhs += G.transpose() * (G.array().colwise() * ivariance_precompute_.array()).matrix();
+  // rhs += G.transpose() * (meas_precompute_.array() * ivariance_precompute_.array()).matrix();
+  double mean_var = 0;
+  for (int i = 0; i < const_frame.size(); ++i) {
+    lhs += G.row(i).transpose() * ivariance_precompute_(i) * G.row(i);
+    rhs += G.row(i).transpose() * ivariance_precompute_(i) * meas_precompute_(i);
+    mean_var += 1.0/ivariance_precompute_(i);
+  }
 
   // marginalize
   Eigen::Matrix<double, 6, 6> temp = lhs.bottomLeftCorner<6,6>()*lhs.topLeftCorner<6,6>().inverse();
@@ -270,7 +279,6 @@ void DopplerFilter::solveFrame(const Pointcloud& const_frame, const std::vector<
   last_lhs_ = lhs_new;
   last_rhs_ = rhs_new;
 
-  // std::cout << trajectory_.back().varpi.transpose() << std::endl;
   return;
 }
 

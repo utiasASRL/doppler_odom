@@ -44,6 +44,7 @@ doppler_odom::OdomOptions loadOptions(const YAML::Node& config) {
   odometry_options.num_sensors = num_sensors;
   odometry_options.ransac_max_iter = config["odometry_options"]["ransac_max_iter"].as<int>();
   odometry_options.ransac_thres = config["odometry_options"]["ransac_thres"].as<double>();
+  odometry_options.ransac_min_dist = config["odometry_options"]["ransac_min_dist"].as<double>();
   odometry_options.integration_steps = config["odometry_options"]["integration_steps"].as<int>();
   odometry_options.zero_vel_tol = config["odometry_options"]["zero_vel_tol"].as<double>();
 

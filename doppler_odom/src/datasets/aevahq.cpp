@@ -137,9 +137,9 @@ AevaHQSequence::AevaHQSequence(const AevaHQDataset::Options& options) : options_
 
   // initialize curr_frame and make sure lengths are the same 
   int len = last_frame_[0] - init_frame_[0];
-  curr_frame_[0] = init_frame_[0] + std::max((int)0, options_.init_frame);;
+  curr_frame_[0] = init_frame_[0] + std::max((int)0, options_.init_frame);
   for (int i = 1; i < 4; ++i) {
-    curr_frame_[i] = init_frame_[i] + std::max((int)0, options_.init_frame);;
+    curr_frame_[i] = init_frame_[i] + std::max((int)0, options_.init_frame);
     if (len != last_frame_[i] - init_frame_[i])
       throw std::runtime_error("Sensor " + std::to_string(i) 
         + " has " + std::to_string(last_frame_[i] - init_frame_[i]) 
