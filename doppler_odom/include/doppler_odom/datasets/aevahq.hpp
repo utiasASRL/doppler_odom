@@ -10,6 +10,9 @@ class AevaHQDataset : public Dataset {
   struct Options : public Dataset::Options{
     // AevaHQDataset specific options
     DopplerImageCalib::Options dcalib_options;
+    std::vector<std::vector<double>> xi_sv;
+    std::vector<std::vector<double>> gyro_ivar;
+    int nframes_gbias_calib;
 
     // set parameters from yaml
     void setParamsFromYaml(const YAML::Node& config) override {
@@ -18,6 +21,9 @@ class AevaHQDataset : public Dataset {
 
       // set child parameters
       dcalib_options.setParamsFromYaml(config);
+      xi_sv = config["dataset_options"]["xi_sv"].as<std::vector<std::vector<double>>>();
+      gyro_ivar = config["dataset_options"]["gyro_ivar"].as<std::vector<std::vector<double>>>();
+      nframes_gbias_calib = config["dataset_options"]["nframes_gbias_calib"].as<int>();
     }
   };
 
@@ -80,8 +86,12 @@ class AevaHQSequence : public Sequence {
   int curr_frame_[4] = {0};
   int last_frame_[4] = {std::numeric_limits<int>::max()};  // exclusive bound
 
+  // calib
+  DopplerImageCalib::ConstPtr doppler_image_calib_;
+
   // gyro measurements
   std::vector<Eigen::MatrixXd> gyro_data_;
+  std::vector<Eigen::Vector3d> const_gyro_bias_;
 };
 
 }  // namespace doppler_odom

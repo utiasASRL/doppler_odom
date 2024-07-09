@@ -8,23 +8,10 @@
 #include <iostream>
 
 #include "doppler_odom/utils/stopwatch.hpp"
-#include "lgmath.hpp"
 
 namespace doppler_odom {
 
 DopplerFilter::DopplerFilter(const Options& options) : options_(options) {
-
-  // extrinsics
-  // TODO: move to data class and set as parameters
-  T_sv_.resize(options_.num_sensors);
-  T_sv_[0] << 0.9999366830849237, 0.008341717781538466, 0.0075534496251198685, -1.0119098938516395,
-              -0.008341717774127972, 0.9999652112886684, -3.150635091210066e-05, -0.39658824335171944,
-              -0.007553449599178521, -3.1504388681967066e-05, 0.9999714717963843, -1.697000000000001,
-               0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  1.00000000e+00;
-
-  // adjoint
-  adT_sv_top3rows_.resize(options_.num_sensors);
-  adT_sv_top3rows_[0] = lgmath::se3::tranAd(T_sv_[0]).topRows<3>();
 
   // ransac generator
   //  seed_ = static_cast<long int>(std::time(nullptr)); // comment out for reproducibility
@@ -35,14 +22,6 @@ DopplerFilter::DopplerFilter(const Options& options) : options_(options) {
   temp.topRows<6>() = -Eigen::Matrix<double, 6, 6>::Identity();
   temp.bottomRows<6>() = Eigen::Matrix<double, 6, 6>::Identity();
   wnoa_lhs_ = temp * options_.Qkinv * temp.transpose();
-
-  // TODO: move to data class and set as parameters
-  // gyro noise
-  gyro_invcov_.resize(options_.num_sensors);
-  gyro_invcov_[0] = Eigen::Matrix3d::Identity();
-  gyro_invcov_[0](0,0) = 1.0/(2.9e-4) * 2;
-  gyro_invcov_[0](1,1) = 1.0/(4.7e-4) * 2;
-  gyro_invcov_[0](2,2) = 1.0/(3.4e-5) * 2;
 }
 
 DopplerFilter::~DopplerFilter() {
@@ -85,10 +64,8 @@ Pointcloud DopplerFilter::preprocessFrame(Pointcloud& frame, double start_time, 
   for (size_t i = 0; i < frame.size(); i += options_.downsample_steps) {
     auto& point = frame[i];
     point.range = sqrt(point.pt[0]*point.pt[0] + point.pt[1]*point.pt[1] + point.pt[2]*point.pt[2]);
-    if (point.range < options_.min_dist || point.range > options_.max_dist)
-      continue;
-
-    output.push_back(point);
+    if (point.range >= options_.min_dist && point.range <= options_.max_dist)
+      output.push_back(point);
   }
 
   return output;
@@ -103,7 +80,7 @@ Pointcloud DopplerFilter::ransacFrame(const Pointcloud& const_frame) {
   // loop over each point to precompute
   for (size_t i = 0; i < const_frame.size(); ++i) {
     // the 'C' in y = C*x
-    ransac_precompute_all.row(i) = const_frame[i].pt.transpose()/const_frame[i].range * adT_sv_top3rows_[const_frame[i].sensor_id];  
+    ransac_precompute_all.row(i) = const_frame[i].pt.transpose()/const_frame[i].range * sensor_calib_->adT_sv_top3rows[const_frame[i].sensor_id];  
 
     // the 'y' in y = C*x
     meas_precompute_all(i) = const_frame[i].radial_velocity;  // the 'y' in y = C*x
@@ -157,7 +134,7 @@ Pointcloud DopplerFilter::ransacFrame(const Pointcloud& const_frame) {
     // 2 DOF solve
     Eigen::Matrix2d lhs2d;
     lhs2d << lhs(0, 0), lhs(0, 2), lhs(2, 0), lhs(2, 2);
-    if (fabs(lhs2d.determinant()) < 1e-7)
+    if (fabs(lhs2d.determinant()) < 1e-4)
       continue; // not invertible
 
     Eigen::Vector2d rhs2d;
@@ -234,12 +211,12 @@ void DopplerFilter::solveFrame(const Pointcloud& const_frame, const std::vector<
   lhs.bottomRightCorner<6, 6>() += options_.Qzinv;
 
   // IMU measurements
-  for (int i = 0; i < options_.num_sensors; ++i) {
-    if (gyro[i].rows() == 1 && gyro[i].cols() == 1)
+  for (int i = 0; i < gyro.size(); ++i) {
+    if (gyro[i].rows() <= 1 && gyro[i].cols() <= 1)
       continue; // no data
 
     Eigen::Matrix<double,3,6> Cgyro = Eigen::Matrix<double, 3, 6>::Zero();
-    Cgyro.rightCols<3>() = T_sv_[i].topLeftCorner<3, 3>();
+    Cgyro.rightCols<3>() = sensor_calib_->T_sv[i].topLeftCorner<3, 3>();
     Eigen::Matrix<double,3,12> Ggyro = Eigen::Matrix<double, 3, 12>::Zero();
 
     // loop over each gyro measurement
@@ -249,8 +226,8 @@ void DopplerFilter::solveFrame(const Pointcloud& const_frame, const std::vector<
       Ggyro.leftCols<6>() = (1.0 - alpha)*Cgyro;
       Ggyro.rightCols<6>() = alpha*Cgyro;
 
-      lhs += Ggyro.transpose() * gyro_invcov_[i] * Ggyro;
-      rhs += Ggyro.transpose() * gyro_invcov_[i] * (gyro[i].row(j).rightCols<3>().transpose() - options_.const_gyro_bias[i]);
+      lhs += Ggyro.transpose() * sensor_calib_->gyro_invcov[i] * Ggyro;
+      rhs += Ggyro.transpose() * sensor_calib_->gyro_invcov[i] * (gyro[i].row(j).rightCols<3>().transpose());
     }
   } // end for i
 
@@ -262,11 +239,9 @@ void DopplerFilter::solveFrame(const Pointcloud& const_frame, const std::vector<
   // // rhs += G.transpose() * meas_precompute_ / (1.0*1.0);
   // lhs += G.transpose() * (G.array().colwise() * ivariance_precompute_.array()).matrix();
   // rhs += G.transpose() * (meas_precompute_.array() * ivariance_precompute_.array()).matrix();
-  double mean_var = 0;
   for (int i = 0; i < const_frame.size(); ++i) {
     lhs += G.row(i).transpose() * ivariance_precompute_(i) * G.row(i);
     rhs += G.row(i).transpose() * ivariance_precompute_(i) * meas_precompute_(i);
-    mean_var += 1.0/ivariance_precompute_(i);
   }
 
   // marginalize

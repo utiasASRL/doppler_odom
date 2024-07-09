@@ -20,16 +20,22 @@ DopplerImageCalib::DopplerImageCalib(const Options& options) : options_(options)
   var_features_ = config["train"]["bias_net"]["var_features"]["input_features"].as<std::vector<std::string>>();
   bias_porder_ = config["train"]["bias_net"]["bias_features"]["polyorder"].as<int>();
   var_porder_ = config["train"]["bias_net"]["var_features"]["polyorder"].as<int>();
+  if (config["dataset"]["sensor_featin"])
+    options_.median_sensorid = config["dataset"]["sensor_featin"].as<int>();
+  auto mm_azi = config["dataset"]["image"]["mm_azi"].as<std::vector<double>>();
+  options_.azimuth_start = mm_azi[0] * M_PI / 180.0;
+  options_.azimuth_end = mm_azi[1] * M_PI / 180.0;
+  options_.azimuth_res = config["dataset"]["image"]["azi_res"].as<double>() * M_PI / 180.0;
 
   // check if we need to calculate median Doppler velocity
   for (const auto& feat: bias_features_)
     if (feat == "medianrv")
-      calc_dop_median_ = true;
+      options_.calc_median = true;
   for (const auto& feat: var_features_) {
     if (feat == "medianrv")
-      calc_dop_median_ = true;
+      options_.calc_median = true;
     if (feat == "rv_var5")  // TODO: handle variable parameter in string
-      calc_pseudo_var_ = true;
+      options_.calc_pseudovar = true;
   }
 
   // TODO: check for rv_stddev5
@@ -73,7 +79,8 @@ void DopplerImageCalib::initImgWeight(bool set_dims, const std::string& dim_txt,
   } // sensor
 }
 
-std::vector<Point3D> DopplerImageCalib::calib_frame(std::vector<Point3D> &frame, const double& min_dist, const double& max_dist) const {
+std::vector<Point3D> DopplerImageCalib::calib_frame(std::vector<Point3D> &frame) const {
+  // Note: this approach so far is slightly faster than 2D hashmap/unordered map. Need to test for multiple sensors however. 
   // 2D vector of pointers to points
   // using PointWFlag = std::pair<bool,const Point3D*>;
   using PointImg = std::vector<std::vector<const Point3D*>>;
@@ -83,59 +90,51 @@ std::vector<Point3D> DopplerImageCalib::calib_frame(std::vector<Point3D> &frame,
   PointImg empty_img(options_.num_rows, std::vector<const Point3D*>(options_.num_cols, nullptr));
   // PointImg empty_img(options_.num_rows * options_.num_cols);
 
-  // create an image for each sensor
-  int num_sensors = bias_weights_.size();
-  std::vector<PointImg> imgs(num_sensors, empty_img);
-  // int pt_count = 0;  // keeps track of total # points to reserve later
-
-  // doppler median
-  // std::vector<std::vector<double>> dop_vels;
-  std::vector<double> dop_vels;
-  // if (calc_dop_median_) {
-  //   // note: not reserving in advance seems to be better since we have to set an upper-bound on # points
-  //   // dop_vels = std::vector<std::vector<double>>(num_sensors, std::vector<double>()); // 1 for each sensor
-  // }
+  // create an image for each active sensor
+  int num_active_sensors = 0; 
+  int img_count = 0;
+  std::unordered_map<int, int> sid2iid; // mapping from sensor id to img id
+  for (size_t sensorid = 0; sensorid < options_.active_lidars.size(); ++sensorid) {
+    if (options_.active_lidars[sensorid]) {
+      ++num_active_sensors;
+      sid2iid[sensorid] = img_count++;
+    }
+  }
+  std::vector<PointImg> imgs(num_active_sensors, empty_img);
+  int pt_count = 0;  // keeps track of total # points to reserve later
+  std::vector<double> dop_vels; // doppler median
 
   // iterate over each point
   for (auto& point : frame) {
     // polynomial approx. of atan2
     // double azimuth = atan2(point.pt[1], point.pt[0]);
-    const double azimuth = atan2_approx(point.pt[1], point.pt[0]);
+    const double azimuth = atan2_approx(point.pt[1], point.pt[0]);  // approximation slightly faster than atan2 call
 
     // skip if not within azimuth bounds (horizontal fov)
     if (azimuth <= options_.azimuth_start || azimuth >= options_.azimuth_end)
       continue;
 
     // determine column
+    int img_id = sid2iid[point.sensor_id];
     const short col = (options_.num_cols - 1) - int((azimuth - options_.azimuth_start)/options_.azimuth_res);
-    if (col < 0 || col >= imgs[point.sensor_id][point.line_id].size())
+    if (col < 0 || col >= imgs[img_id][point.line_id].size())
       continue;
     
     // picking the closest in elevation
-    if (imgs[point.sensor_id][point.line_id][col] == nullptr) {
+    if (imgs[img_id][point.line_id][col] == nullptr) {
       // keep first measurement in bin
-      imgs[point.sensor_id][point.line_id][col] = &point;
-      // ++pt_count;
+      imgs[img_id][point.line_id][col] = &point;
+      ++pt_count;
 
       // stack velocities for median calculation
-      if (calc_dop_median_ && point.sensor_id == 0) { // TODO: change sensor id for aevaHQ
-        // dop_vels[point.sensor_id].push_back(point.radial_velocity);
+      if (options_.calc_median && point.sensor_id == options_.median_sensorid)
         dop_vels.push_back(point.radial_velocity);
-      }
     }
-
-    // keep first measurement in bin
-    // imgs[point.sensor_id][point.line_id*options_.num_cols + col] = &point;
-    // auto flag = imgs[point.sensor_id].emplace(point.line_id*options_.num_cols + col, &point);
-    // if (flag.second)
-    //   ++pt_count;
   }
 
   // median calculation
-  // TODO: for multiple sensors, we compute only for 1 (set as parameter)
-  // no need for vector of doppler median values
   double dop_median;
-  if (calc_dop_median_) {
+  if (options_.calc_median) {
     int n = dop_vels.size()/2;
     auto nitr = dop_vels.begin() + n;
     std::nth_element(dop_vels.begin(), nitr, dop_vels.end());
@@ -144,12 +143,11 @@ std::vector<Point3D> DopplerImageCalib::calib_frame(std::vector<Point3D> &frame,
 
   // output
   std::vector<Point3D> out_frame;
-  // out_frame.reserve(pt_count);
-  out_frame.reserve(80 * 500);  // TODO: update
+  out_frame.reserve(pt_count);
   Eigen::VectorXd bias_feat(bias_features_.size());
   Eigen::VectorXd var_feat(var_features_.size());
   int dscount = 0;
-  for (size_t s = 0; s < num_sensors; ++s) {
+  for (size_t s = 0; s < num_active_sensors; ++s) {
     for (size_t r = 0; r < options_.num_rows; ++r) {
       for (size_t c = 0; c < options_.num_cols; ++c) {
         if (imgs[s][r][c] != nullptr) {
@@ -161,7 +159,7 @@ std::vector<Point3D> DopplerImageCalib::calib_frame(std::vector<Point3D> &frame,
 
           // pseudo-variance
           double pseudovar = 1.0;
-          if (calc_pseudo_var_) {
+          if (options_.calc_pseudovar) {
             bool varflag = computePseudovar(pseudovar, imgs[s][r], c, pseudo_var_hwidth_, 9999);
             if (!varflag)
               continue;
@@ -175,10 +173,10 @@ std::vector<Point3D> DopplerImageCalib::calib_frame(std::vector<Point3D> &frame,
           buildFeatVec(var_feat, out_frame.back(), var_features_, dop_median, pseudovar);
 
           // apply linear regression model
-          // out_frame.back().radial_velocity -= (weights_[sensorid][r](c, 0) + weights_[sensorid][r](c, 1)*out_frame.back().range/250.0);
-          out_frame.back().radial_velocity -= computeModel(bias_feat, bias_weights_[s][out_frame.back().face_id][r][c], bias_porder_);
-          out_frame.back().ivariance = exp(computeModel(var_feat, var_weights_[s][out_frame.back().face_id][0][0], var_porder_));
-          // out_frame.back().ivariance = exp(computeModel(var_feat, var_weights_[0][0][0][0], var_porder_));
+          int sensorid = out_frame.back().sensor_id;
+          int faceid = out_frame.back().face_id;
+          out_frame.back().radial_velocity -= computeModel(bias_feat, bias_weights_[sensorid][faceid][r][c], bias_porder_);
+          out_frame.back().ivariance = exp(computeModel(var_feat, var_weights_[sensorid][faceid][0][0], var_porder_)); // TODO: when var is also a grid/image
         }
       }
     }
@@ -202,8 +200,14 @@ void DopplerImageCalib::buildFeatVec(Eigen::VectorXd& feat, const Point3D& point
       val = scaleValue(point.range, 0.0, 150.0);  // note: range is calculated in preprocess function of DopplerFilter
     else if (feat_string[i] == "intensity")
       val = scaleValue(point.intensity, -70.0, 0.0);
-    else if (feat_string[i] == "medianrv")
-      val = scaleValue(dop_median, -30.0, 1.0); // TODO: scales different if back facing...
+    else if (feat_string[i] == "medianrv") {
+      if (options_.median_sensorid == 0)
+        val = scaleValue(dop_median, -30.0, 1.0); // for forward-facing sensor
+      else if (options_.median_sensorid == 3)
+        val = scaleValue(dop_median, -1.0, 30.0); // for back-facing sensor
+      else
+        throw std::runtime_error("[DopplerImageCalib::buildFeatVec] Unexpected median_sensorid!");
+    }
     else if (feat_string[i] == "rv_var5") // TODO: handle variable
       val = scaleValue(std::min(1.0 / sqrt(dop_pseudovar), 200.0), 0.0, 200.0);
     else
@@ -221,7 +225,7 @@ double DopplerImageCalib::computeModel(const Eigen::VectorXd& feat, const Eigen:
   
   double output = 0;
   // Eigen::VectorXd featpow = feat;
-  Eigen::VectorXd featpow = Eigen::VectorXd::Ones(feat.size()); // TODO: bug in training code that starts with feat ^ 0 = 1
+  Eigen::VectorXd featpow = Eigen::VectorXd::Ones(feat.size()); // TODO: bug in training code that starts with feat^0
   for (int i = 0; i < polyorder; ++i) {
     output += featpow.dot(weights.segment(i * feat.size(), feat.size()));
     featpow.array() *= feat.array();
@@ -254,9 +258,8 @@ bool DopplerImageCalib::computePseudovar(double& pseudovar, const std::vector<co
     pseudovar = sum/count; // set pseudovariance
     return true;
   }
-  else {
+  else
     return false;     // skip this measurement since there are no neighbours
-  }
 }
 
 } // namespace

@@ -1,5 +1,5 @@
 # logging
-log_dir: "/home/ASRL/Experiments/doppler_odom/temp_boreas/jun30_ae-approx_forloopG_00_latestchkpt_ds-b4-a4"
+log_dir: "/home/ASRL/Experiments/doppler_odom/temp_boreas/temp"
 
 # dataset
 dataset: "boreas_aeva"
@@ -9,8 +9,12 @@ dataset_options:
   sequence: "2023_02_15_3"
   init_frame: 0
   last_frame: 100000
-  active_sensors: [true]
+  active_lidars: [true]
+  active_gyros: [true]
   downsample_steps: 4 # after image projection
+
+  # boreas_aeva-specific
+  const_gyro_bias: [-0.00462907, -0.01570387,  0.00280205]  
 
 # doppler calib
 doppler_options:
@@ -19,8 +23,6 @@ doppler_options:
   azimuth_res: 0.00349066
   azimuth_start: -0.872665
   azimuth_end: 0.872665
-  num_rows: 80
-  num_cols: 501
 
 # odometry
 odometry: "doppler_filter"
@@ -35,7 +37,6 @@ odometry_options:
   P0inv: [1e4, 1e4, 1e4, 1e6, 1e6, 1e6]
   Qkinv: [124.097194, 852.430330017, 448.704299478, 1128.19639192, 1230.02908934, 11316.9459369]
   Qzinv: [0.0, 100.0, 100.0, 33271.2755284, 20032.1558168, 0.0]
-  const_gyro_bias: [[-0.00462907, -0.01570387,  0.00280205]]
 
   # filter-specific
   downsample_steps: 4 # before image projection

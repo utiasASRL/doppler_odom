@@ -10,7 +10,6 @@ class DopplerFilter : public Odometry {
  public:
 
   struct Options : public Odometry::Options {
-    std::vector<Eigen::Vector3d> const_gyro_bias; // constant gyro bias (1 for each sensor)
     size_t downsample_steps = 1;
   };
 

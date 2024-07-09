@@ -4,6 +4,7 @@
 
 #include <random>
 #include <memory>
+#include "doppler_odom/datasets/utils.hpp"
 
 namespace doppler_odom {
 
@@ -19,7 +20,7 @@ class Odometry {
     virtual ~Options() = default;
 
     // sensor options
-    int num_sensors = 1;
+    // int num_sensors = 1;
     double min_dist = 5.0;
     double max_dist = 150.0;
 
@@ -70,6 +71,10 @@ class Odometry {
     return poses_;
   };
 
+  void setSensorCalib(const std::shared_ptr<SensorCalib>& sensor_calib) {
+    sensor_calib_ = sensor_calib;
+  }
+
  protected:
   // precomputed measurement model (to avoid repeated calculations in RANSAC and main solve)
   // TODO: move to filter child class
@@ -86,15 +91,10 @@ class Odometry {
   long int seed_ = 0;
   std::mt19937_64 random_engine_;
 
-  // extrinsic
-  std::vector<Eigen::Matrix4d> T_sv_;
-  std::vector<Eigen::Matrix<double,3,6>> adT_sv_top3rows_;
-
-  // gyro inverse covariance
-  std::vector<Eigen::Matrix3d> gyro_invcov_;
-
   Trajectory trajectory_;
   std::vector<Eigen::Matrix4d> poses_;
+
+  std::shared_ptr<SensorCalib> sensor_calib_;
 
  private:
   // name-to-constructor for Odometry

@@ -11,6 +11,7 @@ class BoreasAevaDataset : public Dataset {
     // BoreasAevaDataset-specific options
     DopplerImageCalib::Options dcalib_options;
     std::string path_to_elevation_order;
+    Eigen::Vector3d const_gyro_bias;
     
     // set parameters from yaml
     void setParamsFromYaml(const YAML::Node& config) override {
@@ -20,6 +21,8 @@ class BoreasAevaDataset : public Dataset {
       // set child parameters
       dcalib_options.setParamsFromYaml(config);
       path_to_elevation_order = config["doppler_options"]["root_path"].as<std::string>();
+      auto temp = config["dataset_options"]["const_gyro_bias"].as<std::vector<double>>();
+      const_gyro_bias = Eigen::Vector3d(temp.data());
     }
   };
 
@@ -76,7 +79,6 @@ class BoreasAevaSequence : public Sequence {
   int last_frame_ = std::numeric_limits<int>::max();  // exclusive bound
 
   // for computing line id from elevation
-  // std::vector<std::vector<Eigen::MatrixXd>> elevation_order_by_beam_id_;
   std::vector<Eigen::MatrixXd> elevation_order_by_beam_id_;
   void loadElevationOrder();
 

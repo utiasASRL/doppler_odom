@@ -6,8 +6,6 @@
 #include <glog/logging.h>
 #include <iostream>
 
-#include "doppler_odom/datasets/utils.hpp"
-
 namespace doppler_odom {
 
 namespace {
@@ -159,20 +157,34 @@ BoreasAevaSequence::BoreasAevaSequence(const BoreasAevaDataset::Options& options
 
   initial_timestamp_micro_ = std::stoll(filenames_[0].substr(0, filenames_[0].find(".")));
 
-  // read gyro measurements
-  // TODO: handle multiple sensors for gyro
+  // gyro
   gyro_data_.clear();
   std::string gyro_path = options_.root_path + "/" + options_.sequence + "/applanix/" + "aeva_imu.csv";
-  gyro_data_.push_back(readBoreasGyroToEigenXd(gyro_path, initial_timestamp_micro_));
+  gyro_data_.push_back(readGyroToEigenXd(gyro_path, initial_timestamp_micro_, "boreas_aeva"));
   LOG(INFO) << "Loaded gyro data " << ". Matrix " 
       << gyro_data_.back().rows() << " x " << gyro_data_.back().cols() << std::endl;
 
+  calib_ = std::make_shared<SensorCalib>();
+  calib_->gyro_invcov.resize(1);
+  calib_->gyro_invcov[0] = Eigen::Matrix3d::Identity();
+  calib_->gyro_invcov[0](0,0) = 1.0/(1.45e-4);
+  calib_->gyro_invcov[0](1,1) = 1.0/(2.35e-4); 
+  calib_->gyro_invcov[0](2,2) = 1.0/(1.7e-5);
+
   // Doppler image space calibration
-  options_.dcalib_options.active_sensors = options_.active_sensors;
   doppler_image_calib_ = std::make_shared<DopplerImageCalib>(options_.dcalib_options);
 
   // elevation order
   loadElevationOrder();
+
+  // extrinsics
+  calib_->T_sv.resize(1);
+  calib_->T_sv[0] << 0.9999366830849237, 0.008341717781538466, 0.0075534496251198685, -1.0119098938516395,
+                   -0.008341717774127972, 0.9999652112886684, -3.150635091210066e-05, -0.39658824335171944,
+                   -0.007553449599178521, -3.1504388681967066e-05, 0.9999714717963843, -1.697000000000001,
+                    0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  1.00000000e+00;
+  calib_->adT_sv_top3rows.resize(1);
+  calib_->adT_sv_top3rows[0] = lgmath::se3::tranAd(calib_->T_sv[0]).topRows<3>();
 }
 
 // load next lidar frame (also return start and end times of frame)
@@ -216,6 +228,7 @@ std::vector<Eigen::MatrixXd> BoreasAevaSequence::nextGyro(const double& start_ti
     for (int r = 0; r < inds.size(); ++r) {
       temp_gyro(r, 0) = gyro_data_[sensorid](inds[r], 0) - dt; // timestamp
       temp_gyro.row(r).rightCols<3>() = gyro_data_[sensorid].row(inds[r]).rightCols<3>();
+      temp_gyro.row(r).rightCols<3>() -= options_.const_gyro_bias.transpose();  // apply gyro bias
     }
     output.push_back(temp_gyro);
     LOG(INFO) << "grabbing gyro " << sensorid << ", " << output.back().rows() << " x " << output.back().cols() 
@@ -250,8 +263,7 @@ Pointcloud BoreasAevaSequence::preprocessFrame(Pointcloud& frame, double start_t
   }
 
   // image space calibration
-  // TODO: remove min max range
-  Pointcloud keypoint_frame = doppler_image_calib_->calib_frame(frame, 20.0, 150.0);  // downsamples into image and runs regression
+  Pointcloud keypoint_frame = doppler_image_calib_->calib_frame(frame);  // downsamples into image and runs regression
   return keypoint_frame;
 }
 

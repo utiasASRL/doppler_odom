@@ -24,25 +24,23 @@ class DopplerImageCalib {
     int num_rows = 80;
     int num_cols = 501;   
     int downsample_steps = 1;
-    // int num_sensors = 1;  // TODO: shouldn't be hardcoded
-    std::vector<bool> active_sensors;
+    int median_sensorid = 0;
+    bool calc_median = false;
+    bool calc_pseudovar = false;
+    std::vector<bool> active_lidars;
 
     void setParamsFromYaml(const YAML::Node& config) {
       this->root_path = config["doppler_options"]["root_path"].as<std::string>();
       this->model_name = config["doppler_options"]["model"].as<std::string>();
-      this->azimuth_res = config["doppler_options"]["azimuth_res"].as<double>();
-      this->azimuth_start = config["doppler_options"]["azimuth_start"].as<double>();
-      this->azimuth_end = config["doppler_options"]["azimuth_end"].as<double>();
-      this->num_rows = config["doppler_options"]["num_rows"].as<int>(); // TODO: should we be reading this from model parameters?
-      this->num_cols = config["doppler_options"]["num_cols"].as<int>();
       this->downsample_steps = config["dataset_options"]["downsample_steps"].as<int>();
+      this->active_lidars = config["dataset_options"]["active_lidars"].as<std::vector<bool>>();
     }
   };
 
   DopplerImageCalib(const Options& options);
   // ~DopplerImageCalib();
 
-  std::vector<Point3D> calib_frame(std::vector<Point3D> &frame, const double& min_dist, const double& max_dist) const;
+  std::vector<Point3D> calib_frame(std::vector<Point3D> &frame) const;
 
  protected:
   Options options_;
