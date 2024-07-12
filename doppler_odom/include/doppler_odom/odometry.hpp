@@ -76,18 +76,6 @@ class Odometry {
   }
 
  protected:
-  // precomputed measurement model (to avoid repeated calculations in RANSAC and main solve)
-  // TODO: move to filter child class
-  Eigen::Matrix<double,Eigen::Dynamic,6> ransac_precompute_;
-  Eigen::Matrix<double,Eigen::Dynamic,1> meas_precompute_;
-  Eigen::Matrix<double,Eigen::Dynamic,1> alpha_precompute_;
-  Eigen::Matrix<double,Eigen::Dynamic,1> malpha_precompute_;
-  Eigen::Matrix<double,Eigen::Dynamic,1> ivariance_precompute_;
-  // std::vector<bool> sensor_active_;
-
-  Eigen::Matrix<double, 6, 6> last_lhs_;
-  Eigen::Matrix<double, 6, 1> last_rhs_;
-
   long int seed_ = 0;
   std::mt19937_64 random_engine_;
 

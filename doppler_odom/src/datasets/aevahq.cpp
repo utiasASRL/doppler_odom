@@ -243,12 +243,8 @@ Pointcloud AevaHQSequence::next(double& start_time, double& end_time) {
 
 // load gyro data between start_time and end_time
 std::vector<Eigen::MatrixXd> AevaHQSequence::nextGyro(const double& start_time, const double& end_time) {
-  // // TODO
-  // std::vector<Eigen::MatrixXd> output;
-  // output.resize(4, Eigen::MatrixXd(0, 0));
-  // return output;
-  // double dt = 0.0;
 
+  // loop for each sensor
   std::vector<Eigen::MatrixXd> output;
   for (int sensorid = 0; sensorid < gyro_data_.size(); ++sensorid) {
     if (options_.active_gyros[sensorid] != true) {    // inactive gyro

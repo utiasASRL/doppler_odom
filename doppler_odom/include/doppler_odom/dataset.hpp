@@ -59,8 +59,6 @@ class Dataset {
     std::string root_path;
     int init_frame = 0;
     int last_frame = std::numeric_limits<int>::max();  // exclusive bound
-    std::vector<bool> active_lidars;
-    std::vector<bool> active_gyros;
 
     // set base parameters from yaml
     void setBaseParamsFromYaml(const YAML::Node& config) {
@@ -69,8 +67,6 @@ class Dataset {
       this->sequence = config["dataset_options"]["sequence"] .as<std::string>();
       this->init_frame = config["dataset_options"]["init_frame"].as<int>();
       this->last_frame = config["dataset_options"]["last_frame"].as<int>();
-      this->active_lidars = config["dataset_options"]["active_lidars"].as<std::vector<bool>>();
-      this->active_gyros = config["dataset_options"]["active_gyros"].as<std::vector<bool>>();
     }
 
     // set parameters from yaml (calls setBaseParamsFromYaml)

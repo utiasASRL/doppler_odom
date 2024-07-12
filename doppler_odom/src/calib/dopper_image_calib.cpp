@@ -82,13 +82,10 @@ void DopplerImageCalib::initImgWeight(bool set_dims, const std::string& dim_txt,
 std::vector<Point3D> DopplerImageCalib::calib_frame(std::vector<Point3D> &frame) const {
   // Note: this approach so far is slightly faster than 2D hashmap/unordered map. Need to test for multiple sensors however. 
   // 2D vector of pointers to points
-  // using PointWFlag = std::pair<bool,const Point3D*>;
   using PointImg = std::vector<std::vector<const Point3D*>>;
-  // using PointImg = std::unordered_map<int, const Point3D*>;
   
   // initialize empty grid (2D img filled with null pointers)
   PointImg empty_img(options_.num_rows, std::vector<const Point3D*>(options_.num_cols, nullptr));
-  // PointImg empty_img(options_.num_rows * options_.num_cols);
 
   // create an image for each active sensor
   int num_active_sensors = 0; 

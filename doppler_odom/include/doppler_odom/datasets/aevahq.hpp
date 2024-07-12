@@ -13,6 +13,8 @@ class AevaHQDataset : public Dataset {
     std::vector<std::vector<double>> xi_sv;
     std::vector<std::vector<double>> gyro_ivar;
     int nframes_gbias_calib;
+    std::vector<bool> active_lidars;
+    std::vector<bool> active_gyros;
 
     // set parameters from yaml
     void setParamsFromYaml(const YAML::Node& config) override {
@@ -24,6 +26,8 @@ class AevaHQDataset : public Dataset {
       xi_sv = config["dataset_options"]["xi_sv"].as<std::vector<std::vector<double>>>();
       gyro_ivar = config["dataset_options"]["gyro_ivar"].as<std::vector<std::vector<double>>>();
       nframes_gbias_calib = config["dataset_options"]["nframes_gbias_calib"].as<int>();
+      this->active_lidars = config["dataset_options"]["active_lidars"].as<std::vector<bool>>();
+      this->active_gyros = config["dataset_options"]["active_gyros"].as<std::vector<bool>>();
     }
   };
 

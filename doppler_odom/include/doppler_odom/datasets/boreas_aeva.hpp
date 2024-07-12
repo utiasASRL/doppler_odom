@@ -12,7 +12,9 @@ class BoreasAevaDataset : public Dataset {
     DopplerImageCalib::Options dcalib_options;
     std::string path_to_elevation_order;
     Eigen::Vector3d const_gyro_bias;
-    
+    std::vector<bool> active_lidars;
+    std::vector<bool> active_gyros;
+
     // set parameters from yaml
     void setParamsFromYaml(const YAML::Node& config) override {
       // set base parameters
@@ -23,6 +25,8 @@ class BoreasAevaDataset : public Dataset {
       path_to_elevation_order = config["doppler_options"]["root_path"].as<std::string>();
       auto temp = config["dataset_options"]["const_gyro_bias"].as<std::vector<double>>();
       const_gyro_bias = Eigen::Vector3d(temp.data());
+      this->active_lidars = config["dataset_options"]["active_lidars"].as<std::vector<bool>>();
+      this->active_gyros = config["dataset_options"]["active_gyros"].as<std::vector<bool>>();
     }
   };
 

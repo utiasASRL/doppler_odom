@@ -36,18 +36,11 @@ doppler_odom::OdomOptions loadOptions(const YAML::Node& config) {
   auto& odometry_options = *options.odometry_options;
 
   odometry_options.debug_path = config["log_dir"].as<std::string>();
-
-  // int num_sensors = 0;
-  // for (const auto& flag : options.dataset_options->active_sensors)
-  //   if (flag)
-  //     ++num_sensors;
-  // odometry_options.num_sensors = num_sensors;
   odometry_options.ransac_max_iter = config["odometry_options"]["ransac_max_iter"].as<int>();
   odometry_options.ransac_thres = config["odometry_options"]["ransac_thres"].as<double>();
   odometry_options.ransac_min_dist = config["odometry_options"]["ransac_min_dist"].as<double>();
   odometry_options.integration_steps = config["odometry_options"]["integration_steps"].as<int>();
   odometry_options.zero_vel_tol = config["odometry_options"]["zero_vel_tol"].as<double>();
-
   odometry_options.min_dist = config["odometry_options"]["min_dist"].as<double>();
   odometry_options.max_dist = config["odometry_options"]["max_dist"].as<double>();
 
@@ -62,13 +55,7 @@ doppler_odom::OdomOptions loadOptions(const YAML::Node& config) {
 
   // algorithm-specific parameters
   if (options.odometry == "doppler_filter") {
-    if (DopplerFilter::Options* dfilter_options = dynamic_cast<DopplerFilter::Options*>(options.odometry_options.get())) {
-      // gyro bias (1 for each sensor)
-      // auto temp_vec = config["odometry_options"]["const_gyro_bias"].as<std::vector<std::vector<double>>>();
-      // dfilter_options->const_gyro_bias.clear();
-      // for (auto& bias: temp_vec)
-      //   dfilter_options->const_gyro_bias.push_back(Eigen::Vector3d(bias.data()));
-      
+    if (DopplerFilter::Options* dfilter_options = dynamic_cast<DopplerFilter::Options*>(options.odometry_options.get())) {      
       dfilter_options->downsample_steps = config["odometry_options"]["downsample_steps"].as<int>();
     }
   }
@@ -120,37 +107,35 @@ int main(int argc, char** argv) {
     while (seq->hasNext()) {
       LOG(INFO) << "Processing frame " << seq->currFrame() << std::endl;
 
-      // load next lidar frame (~13ms, not counted towards time in paper)
+      // load next lidar frame
       timer[0].second->start();
       double start_time;
       double end_time;
       auto frame = seq->next(start_time, end_time);
       timer[0].second->stop();
 
-      // preprocessing step (downsample + regression, ~3.9ms)
+      // preprocessing step
       timer[1].second->start();
       auto odom_preprocessed_frame = odometry->preprocessFrame(frame, start_time, end_time);
       auto seq_preprocessed_frame = seq->preprocessFrame(odom_preprocessed_frame, start_time, end_time);
       timer[1].second->stop();
 
-      // load gyro measurements that overlap with latest lidar frame (~0.1ms, not counted towards time in paper)
+      // load gyro measurements that overlap with latest lidar frame
       timer[2].second->start();
-      // auto frame_times = odometry->getLatestFrameTimes();
-      // auto gyro = seq->nextGyro(frame_times[0], frame_times[1]);
       auto gyro = seq->nextGyro(start_time, end_time);
       timer[2].second->stop();
 
-      // ransac (~1.1ms)
+      // ransac
       timer[3].second->start();
       const auto ransac_frame = odometry->ransacFrame(seq_preprocessed_frame);
       timer[3].second->stop();
 
-      // estimate latest velocity (~0.5ms)
+      // estimate latest velocity
       timer[4].second->start();
       odometry->solveFrame(ransac_frame, gyro);
       timer[4].second->stop();
 
-      // integrate for latest pose (~0.01ms)
+      // integrate for latest pose
       timer[5].second->start();
       const auto pose = odometry->integrateForPose();
       timer[5].second->stop();

@@ -235,14 +235,8 @@ void DopplerFilter::solveFrame(const Pointcloud& const_frame, const std::vector<
   Eigen::Matrix<double, Eigen::Dynamic, 12> G(const_frame.size(), 12); // N x 12
   G.leftCols<6>() = ransac_precompute_.array().colwise() * malpha_precompute_.array();
   G.rightCols<6>() = ransac_precompute_.array().colwise() * alpha_precompute_.array();
-  // // lhs += G.transpose() * G / (1.0*1.0);   // TODO: add variance as parameter
-  // // rhs += G.transpose() * meas_precompute_ / (1.0*1.0);
-  // lhs += G.transpose() * (G.array().colwise() * ivariance_precompute_.array()).matrix();
-  // rhs += G.transpose() * (meas_precompute_.array() * ivariance_precompute_.array()).matrix();
-  for (int i = 0; i < const_frame.size(); ++i) {
-    lhs += G.row(i).transpose() * ivariance_precompute_(i) * G.row(i);
-    rhs += G.row(i).transpose() * ivariance_precompute_(i) * meas_precompute_(i);
-  }
+  lhs += G.transpose() * (G.array().colwise() * ivariance_precompute_.array()).matrix();
+  rhs += G.transpose() * (meas_precompute_.array() * ivariance_precompute_.array()).matrix();
 
   // marginalize
   Eigen::Matrix<double, 6, 6> temp = lhs.bottomLeftCorner<6,6>()*lhs.topLeftCorner<6,6>().inverse();

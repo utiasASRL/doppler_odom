@@ -32,8 +32,19 @@ class DopplerFilter : public Odometry {
   void initializeTimestamp(int index_frame, const std::vector<Pointcloud>& const_frame);
   const Options options_;
 
-  // precompute
+  // precompute WNOA prior
   Eigen::Matrix<double, 12, 12> wnoa_lhs_;
+
+  // precomputed measurement model (to avoid repeated calculations in RANSAC and main solve)
+  Eigen::Matrix<double,Eigen::Dynamic,6> ransac_precompute_;
+  Eigen::Matrix<double,Eigen::Dynamic,1> meas_precompute_;
+  Eigen::Matrix<double,Eigen::Dynamic,1> alpha_precompute_;
+  Eigen::Matrix<double,Eigen::Dynamic,1> malpha_precompute_;
+  Eigen::Matrix<double,Eigen::Dynamic,1> ivariance_precompute_;
+
+  // for marginalizing out previous state
+  Eigen::Matrix<double, 6, 6> last_lhs_;
+  Eigen::Matrix<double, 6, 1> last_rhs_;
 
   DOPPLER_ODOM_REGISTER_ODOMETRY("doppler_filter", DopplerFilter);
 };
