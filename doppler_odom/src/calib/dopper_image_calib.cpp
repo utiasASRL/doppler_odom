@@ -181,11 +181,7 @@ std::vector<Point3D> DopplerImageCalib::calib_frame(std::vector<Point3D> &frame)
       }
     }
   }
-  // for (size_t s = 0; s < num_sensors; ++s) {
-  //   for (const auto& point: imgs[s]) {
-  //     out_frame.push_back(*point.second);
-  //   }
-  // }
+  
   return out_frame;
 }
 

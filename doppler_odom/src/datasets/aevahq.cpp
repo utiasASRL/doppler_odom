@@ -57,6 +57,14 @@ Pointcloud readPointCloud(const std::string& path, double time_delta_sec, int se
     new_point.face_id = (int)getFloatFromByteArray(buffer.data(), bufpos + offset * float_offset);
     new_point.sensor_id = sensor_id;
 
+    // error checks
+    if (new_point.line_id < 0 || new_point.line_id >= 64)
+      continue;
+    if (new_point.face_id < 0 || new_point.face_id > 5)
+      continue;
+    if (new_point.sensor_id < 0 || new_point.sensor_id > 4)
+      continue;
+
     // include if within start and end time
     if (new_point.timestamp >= start_time && new_point.timestamp <= end_time)
       frame.push_back(new_point);
@@ -244,7 +252,7 @@ std::vector<Eigen::MatrixXd> AevaHQSequence::nextGyro(const double& start_time, 
   std::vector<Eigen::MatrixXd> output;
   for (int sensorid = 0; sensorid < gyro_data_.size(); ++sensorid) {
     if (options_.active_gyros[sensorid] != true) {    // inactive gyro
-      output.push_back(Eigen::Matrix<double, 1, 1>());  // 1x1 zero matrix
+      output.push_back(Eigen::MatrixXd(0, 0));  // empty matrix
       continue;
     }
 
@@ -257,7 +265,7 @@ std::vector<Eigen::MatrixXd> AevaHQSequence::nextGyro(const double& start_time, 
     } // end for r
 
     if (inds.size() == 0) {   // no measurements
-      output.push_back(Eigen::Matrix<double, 1, 1>());  // 1x1 zero matrix
+      output.push_back(Eigen::MatrixXd(0, 0));  // empty matrix
       LOG(INFO) << "grabbing gyro " << sensorid << ", no gyro data" << std::endl;
       continue;
     }
