@@ -1,5 +1,5 @@
 # logging
-log_dir: "/home/ASRL/Experiments/doppler_odom/temp_boreas/aeries4l4g_b2a2"
+log_dir: "/home/ASRL/Experiments/doppler_odom/temp_boreas/test"
 
 # dataset
 dataset: "aevahq"
@@ -9,11 +9,10 @@ dataset_options:
   sequence: "routeB_run3_binary"
   init_frame: 0
   last_frame: 100000
-  active_lidars: [true, true, true, true]  # 0: front, 1: left, 2: right, 3: back
-  active_gyros: [true, true, true, true] # 0: front, 1: left, 2: right, 3: back
-  downsample_steps: 2 # after image projection
 
   # aevahq-specific
+  active_lidars: [false, false, false, true]  # 0: front, 1: left, 2: right, 3: back
+  active_gyros: [false, false, false, true] # 0: front, 1: left, 2: right, 3: back
   xi_sv: [[-1.65343088,  0.26828037, -1.74613417,  0.00546397, -0.02480444, 0.02448552],
           [-1.39670762,  0.60708398, -1.86611052,  0.01546543, -0.03268383, -1.55160975],
           [-0.23814386,  0.46417746, -1.78343696, -0.03448442,  0.04261376, 1.60518773],
@@ -28,6 +27,7 @@ dataset_options:
 doppler_options:
   root_path: "/home/ASRL/Experiments/sensor_config/aeva/"
   model: "mar4_aeries2_lrvar_bp4-rim_vp3-imv-g_r5-150-e5_s0123_a0p1_aplat_newcalib_redo"
+  downsample_steps: 2 # after image projection
 
 # odometry
 odometry: "doppler_filter"
@@ -42,7 +42,6 @@ odometry_options:
   P0inv: [1e6, 1e6, 1e6, 1e8, 1e8, 1e8]
   Qkinv: [3.0e+2, 4.1e+3, 1.9e+3, 6.2e+4, 3.6e+4, 4.1e+5]
   Qzinv: [0.0e0, 1.3e2, 3.2e2, 5.1e4, 5.1e4, 0.0e0]
-  const_gyro_bias: [[-0.004580390732042348, -0.015914139544965403, 0.002919723147493117]]
   
   # filter-specific
   downsample_steps: 2 # before image projection

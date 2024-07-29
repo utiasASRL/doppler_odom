@@ -84,8 +84,6 @@ class AevaHQSequence : public Sequence {
   std::string dir_path_[4];
   std::vector<std::vector<std::string>> filenames_;
   int64_t initial_timestamp_micro_;
-  // int init_frame_ = 0;
-  // int curr_frame_ = 0;
   int init_frame_[4] = {0};
   int curr_frame_[4] = {0};
   int last_frame_[4] = {std::numeric_limits<int>::max()};  // exclusive bound

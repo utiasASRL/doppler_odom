@@ -1,0 +1,34 @@
+# logging
+log_dir: "/home/ASRL/Experiments/doppler_odom/temp_boreas/test"
+
+# dataset
+dataset: "aevahq"
+dataset_options:
+  all_sequences: false
+  root_path: "/path/to/root/of/data"
+  sequence: "sim_example_sequence1"
+  init_frame: 0
+  last_frame: 100000
+
+  # example-specific
+  example_string: "abc"
+  example_list_string: ["abc", "def", "ghi"]
+  example_double: 0.1
+  example_list_double: [0.1, 0.2, 0.3]
+
+# odometry
+odometry: "doppler_filter"
+odometry_options:
+  ransac_max_iter: 40
+  ransac_thres: 0.4
+  ransac_min_dist: 5.0
+  min_dist: 5.0 
+  max_dist: 150.0 
+  integration_steps: 100
+  zero_vel_tol: 0.03
+  P0inv: [1e6, 1e6, 1e6, 1e8, 1e8, 1e8]
+  Qkinv: [3.0e+2, 4.1e+3, 1.9e+3, 6.2e+4, 3.6e+4, 4.1e+5]
+  Qzinv: [0.0e0, 1.3e2, 3.2e2, 5.1e4, 5.1e4, 0.0e0]
+  
+  # filter-specific
+  downsample_steps: 2

@@ -32,7 +32,7 @@ class DopplerImageCalib {
     void setParamsFromYaml(const YAML::Node& config) {
       this->root_path = config["doppler_options"]["root_path"].as<std::string>();
       this->model_name = config["doppler_options"]["model"].as<std::string>();
-      this->downsample_steps = config["dataset_options"]["downsample_steps"].as<int>();
+      this->downsample_steps = config["doppler_options"]["downsample_steps"].as<int>();
       this->active_lidars = config["dataset_options"]["active_lidars"].as<std::vector<bool>>();
     }
   };
