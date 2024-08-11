@@ -73,6 +73,20 @@ class Stopwatch {
     }
   }
 
+  template <class duration_t = std::chrono::microseconds>
+  typename duration_t::rep count_micro() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (started_) {
+      if (paused_) {
+        return std::chrono::duration_cast<duration_t>(accumulated_).count();
+      } else {
+        return std::chrono::duration_cast<duration_t>(accumulated_ + (clock::now() - reference_)).count();
+      }
+    } else {
+      return duration_t(0).count();
+    }
+  }
+
   friend std::ostream &operator<<(std::ostream &os, const Stopwatch &sw) { return os << sw.count() << "ms"; }
 
  private:

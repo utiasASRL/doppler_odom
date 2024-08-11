@@ -99,12 +99,18 @@ int main(int argc, char** argv) {
     timer.emplace_back("solve ............... ", std::make_unique<Stopwatch<>>(false));
     timer.emplace_back("integration ............... ", std::make_unique<Stopwatch<>>(false));
 
+    std::ofstream frame_times_txt(config["log_dir"].as<std::string>() + "/" + seq->name() + "_frame_times.txt");
+    std::vector<double> frame_times;
+    frame_times.clear();
+    std::unique_ptr<Stopwatch<>> frame_timer = std::make_unique<Stopwatch<>>(false);
+
     // get odometry
     auto odometry = Odometry::Get(options.odometry, *options.odometry_options);
     odometry->setSensorCalib(seq->calib_);
 
     bool odometry_success = true;
     while (seq->hasNext()) {
+      frame_timer->reset();
       LOG(INFO) << "Processing frame " << seq->currFrame() << std::endl;
 
       // load next lidar frame
@@ -116,8 +122,10 @@ int main(int argc, char** argv) {
 
       // preprocessing step
       timer[1].second->start();
+      frame_timer->start();
       auto odom_preprocessed_frame = odometry->preprocessFrame(frame, start_time, end_time);
       auto seq_preprocessed_frame = seq->preprocessFrame(odom_preprocessed_frame, start_time, end_time);
+      frame_timer->stop();
       timer[1].second->stop();
 
       // load gyro measurements that overlap with latest lidar frame
@@ -127,24 +135,36 @@ int main(int argc, char** argv) {
 
       // ransac
       timer[3].second->start();
+      frame_timer->start();
       const auto ransac_frame = odometry->ransacFrame(seq_preprocessed_frame);
+      frame_timer->stop();
       timer[3].second->stop();
 
       // estimate latest velocity
       timer[4].second->start();
+      frame_timer->start();
       odometry->solveFrame(ransac_frame, gyro);
+      frame_timer->stop();
       timer[4].second->stop();
 
       // integrate for latest pose
       timer[5].second->start();
+      frame_timer->start();
       const auto pose = odometry->integrateForPose();
+      frame_timer->stop();
       timer[5].second->stop();
+
+      // frame time
+      frame_times.push_back(frame_timer->count_micro() * 1.0e-3);
     }
 
     // dump timing information
-    for (size_t i = 0; i < timer.size(); i++) {
+    for (size_t i = 0; i < timer.size(); ++i) {
       LOG(WARNING) << "Average " << timer[i].first << (timer[i].second->count() / (double)seq->numFrames()) << " ms"
                    << std::endl;
+    }
+    for (size_t i = 0; i < frame_times.size(); ++i) {
+      frame_times_txt << frame_times[i] << std::endl;
     }
 
     // save
