@@ -20,7 +20,6 @@ class Odometry {
     virtual ~Options() = default;
 
     // sensor options
-    // int num_sensors = 1;
     double min_dist = 5.0;
     double max_dist = 150.0;
 
@@ -28,6 +27,7 @@ class Odometry {
     int ransac_max_iter = 20;
     double ransac_thres = 0.3;
     double ransac_min_dist = 20.0;
+    bool ransac_gyro = false;
 
     // integration
     int integration_steps = 100;
@@ -38,8 +38,6 @@ class Odometry {
     Eigen::Matrix<double, 6, 6> P0inv = Eigen::Matrix<double, 6, 6>::Identity();
     Eigen::Matrix<double, 6, 6> Qzinv = Eigen::Matrix<double, 6, 6>::Identity();
 
-    //
-    bool debug_print = false;  // Whether to output debug information to std::cout
     std::string debug_path = "/tmp/";
   };
 
@@ -59,7 +57,7 @@ class Odometry {
   // register new frame for odometry
   virtual void solveFrame(const Pointcloud& frame, const std::vector<Eigen::MatrixXd>& gyro) = 0;
   virtual Pointcloud preprocessFrame(Pointcloud& frame, double start_time, double end_time) = 0;
-  virtual Pointcloud ransacFrame(const Pointcloud& frame) = 0;
+  virtual Pointcloud ransacFrame(const Pointcloud& frame, const std::vector<Eigen::MatrixXd>& gyro) = 0;
   virtual Eigen::Matrix4d integrateForPose() = 0;
   virtual std::vector<double> getLatestFrameTimes() = 0;
 

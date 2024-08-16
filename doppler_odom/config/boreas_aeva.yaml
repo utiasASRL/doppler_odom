@@ -1,5 +1,5 @@
 # logging
-log_dir: "/home/ASRL/Experiments/doppler_odom/temp_boreas/jul28_b4_a4_frame_time_seq1"
+log_dir: "/home/ASRL/Experiments/doppler_odom/temp_boreas/test_name"
 
 # dataset
 dataset: "boreas_aeva"
@@ -19,7 +19,7 @@ dataset_options:
 doppler_options:
   root_path: "/home/ASRL/Experiments/sensor_config/boreas/"
   model: "mar8_boreas_lrvar_bp4-rim_vp3-imv-g_r5-150-e5_a0p1_aplat"
-  downsample_steps: 4 # after image projection
+  downsample_steps: 2 # after image projection
 
 # odometry
 odometry: "doppler_filter"
@@ -27,6 +27,7 @@ odometry_options:
   ransac_max_iter: 40
   ransac_thres: 0.4
   ransac_min_dist: 5.0
+  ransac_gyro: false
   min_dist: 5.0 
   max_dist: 150.0 
   integration_steps: 100
@@ -36,6 +37,6 @@ odometry_options:
   Qzinv: [0.0, 100.0, 100.0, 33271.2755284, 20032.1558168, 0.0]
 
   # filter-specific
-  downsample_steps: 4 # before image projection
+  downsample_steps: 2 # before image projection
   
 

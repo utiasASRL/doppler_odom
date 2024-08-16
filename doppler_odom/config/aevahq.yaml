@@ -1,5 +1,5 @@
 # logging
-log_dir: "/home/ASRL/Experiments/doppler_odom/temp_boreas/test"
+log_dir: "/home/ASRL/Experiments/doppler_odom/temp_boreas/test_name"
 
 # dataset
 dataset: "aevahq"
@@ -27,7 +27,7 @@ dataset_options:
 doppler_options:
   root_path: "/home/ASRL/Experiments/sensor_config/aeva/"
   model: "mar4_aeries2_lrvar_bp4-rim_vp3-imv-g_r5-150-e5_s0123_a0p1_aplat_newcalib_redo"
-  downsample_steps: 2 # after image projection
+  downsample_steps: 2 # after image projection  
 
 # odometry
 odometry: "doppler_filter"
@@ -35,6 +35,7 @@ odometry_options:
   ransac_max_iter: 40
   ransac_thres: 0.4
   ransac_min_dist: 5.0
+  ransac_gyro: false
   min_dist: 5.0 
   max_dist: 150.0 
   integration_steps: 100

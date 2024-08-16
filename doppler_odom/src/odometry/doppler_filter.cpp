@@ -71,7 +71,7 @@ Pointcloud DopplerFilter::preprocessFrame(Pointcloud& frame, double start_time, 
   return output;
 }
 
-Pointcloud DopplerFilter::ransacFrame(const Pointcloud& const_frame) {
+Pointcloud DopplerFilter::ransacFrame(const Pointcloud& const_frame, const std::vector<Eigen::MatrixXd>& gyro) {
 
   // initialize precomputation variables
   Eigen::Matrix<double, Eigen::Dynamic,6> ransac_precompute_all = Eigen::Matrix<double, Eigen::Dynamic, 6>(const_frame.size(), 6);
@@ -89,6 +89,27 @@ Pointcloud DopplerFilter::ransacFrame(const Pointcloud& const_frame) {
   // initialize uniform distribution
   std::uniform_int_distribution<int> uni_dist(0, const_frame.size() - 1);
 
+  // setup gyro (optional)
+  Eigen::Matrix3d lhs_gyro = Eigen::Matrix3d::Zero();
+  Eigen::Vector3d rhs_gyro = Eigen::Vector3d::Zero();
+  if (options_.ransac_gyro) {
+    for (int i = 0; i < gyro.size(); ++i) {
+      if (gyro[i].rows() <= 1 && gyro[i].cols() <= 1)
+        continue; // no data
+
+      Eigen::Matrix3d R_sv = sensor_calib_->T_sv[i].topLeftCorner<3, 3>();
+
+      // loop over each gyro measurement
+      for (int j = 0; j < gyro[i].rows(); ++j) {
+        
+        double gy = (R_sv.transpose() * gyro[i].row(j).rightCols<3>().transpose())(2); // rotate measurement to vehicle frame, extract z dim
+        double gyvar = (R_sv.transpose() * sensor_calib_->gyro_invcov[i] * R_sv)(2, 2); // rotate covariance, extract z dim
+        lhs_gyro(2, 2) += gyvar;
+        rhs_gyro(2) += gy / gyvar;
+      }
+    } // end for i
+  }
+
   // ransac
   Eigen::Matrix3d lhs;
   Eigen::Vector3d rhs;
@@ -103,6 +124,10 @@ Pointcloud DopplerFilter::ransacFrame(const Pointcloud& const_frame) {
     // setup linear system
     lhs.setZero();
     rhs.setZero();
+
+    // gyro contribution (can be zero, i.e., not turned on)
+    lhs += lhs_gyro;
+    rhs += rhs_gyro;
 
     // sample until we satisfy min. range condition for ransac
     int sample1, sample2;
@@ -136,6 +161,8 @@ Pointcloud DopplerFilter::ransacFrame(const Pointcloud& const_frame) {
     lhs2d << lhs(0, 0), lhs(0, 2), lhs(2, 0), lhs(2, 2);
     if (fabs(lhs2d.determinant()) < 1e-4)
       continue; // not invertible
+
+    // TODO: optional 3 DOF solve
 
     Eigen::Vector2d rhs2d;
     rhs2d << rhs(0), rhs(2);
@@ -251,26 +278,13 @@ void DopplerFilter::solveFrame(const Pointcloud& const_frame, const std::vector<
   return;
 }
 
-void DopplerFilter::initializeTimestamp(int index_frame, const std::vector<Pointcloud>& const_frames) {
-  double min_timestamp = std::numeric_limits<double>::max();
-  double max_timestamp = std::numeric_limits<double>::min();
-  for (const auto &const_frame : const_frames) {
-    for (const auto &point : const_frame) {
-      if (point.timestamp > max_timestamp) max_timestamp = point.timestamp;
-      if (point.timestamp < min_timestamp) min_timestamp = point.timestamp;
-    }
-  }
-  trajectory_[index_frame].begin_timestamp = min_timestamp;
-  trajectory_[index_frame].end_timestamp = max_timestamp;
-}
-
 Eigen::Matrix4d DopplerFilter::integrateForPose() {
   // get velocity knots
   Eigen::Matrix<double,6,1> knot1 = Eigen::Matrix<double,6,1>::Zero();
   double dt = 0.1;
   if (trajectory_.size() > 1) {
     knot1 = trajectory_[trajectory_.size()-2].varpi;
-    dt = trajectory_.back().end_timestamp - trajectory_[trajectory_.size()-2].end_timestamp;
+    dt = trajectory_.back().end_timestamp - trajectory_.back().begin_timestamp;
   }
   Eigen::Matrix<double,6,1> knot2 = trajectory_.back().varpi;
 

@@ -5,10 +5,16 @@
 #include <fstream>
 #include <glog/logging.h>
 #include <iostream>
+#include <iomanip>
 
 namespace doppler_odom {
 
 namespace {
+
+Eigen::Vector3d polarToXYZ(double range, double azimuth, double elevation) {
+  double xy = range * cos(elevation);
+  return Eigen::Vector3d(xy * cos(azimuth), xy * sin(azimuth), range * sin(elevation));
+}
 
 Pointcloud readPointCloud(const std::string& path, double time_delta_sec, int sensor_id, double start_time, double end_time) {
   Pointcloud frame;
@@ -38,6 +44,24 @@ Pointcloud readPointCloud(const std::string& path, double time_delta_sec, int se
     ++offset;
     new_point.pt[2] = getFloatFromByteArray(buffer.data(), bufpos + offset * float_offset);
 
+    // rescale by azimuth and range
+    // note: this calibration would normally be done by the sensor hardware/firmware, 
+    // so we will recompute these quantities later (pretending we didn't calculate them already)
+    double range = sqrt(new_point.pt[0]*new_point.pt[0] + new_point.pt[1]*new_point.pt[1] + new_point.pt[2]*new_point.pt[2]);
+    double azimuth = atan2(new_point.pt[1], new_point.pt[0]);
+    double xy = sqrt(new_point.pt[0]*new_point.pt[0] + new_point.pt[1]*new_point.pt[1]);
+    double elevation = atan2(new_point.pt[2], xy);
+
+    // scales differently based on sensor id
+    if (sensor_id == 0)
+      new_point.pt = polarToXYZ(range * 1.0, azimuth * 0.99816, elevation);
+    else if (sensor_id == 1)
+      new_point.pt = polarToXYZ(range * 1.00087107, azimuth * 1.00873727, elevation);
+    else if (sensor_id == 2)
+      new_point.pt = polarToXYZ(range * 1.00272944, azimuth * 1.00761913, elevation);
+    else if (sensor_id == 3)
+      new_point.pt = polarToXYZ(range * 1.00369723, azimuth * 1.00797442, elevation);
+
     // others
     ++offset;
     new_point.radial_velocity = getFloatFromByteArray(buffer.data(), bufpos + offset * float_offset);
@@ -52,7 +76,7 @@ Pointcloud readPointCloud(const std::string& path, double time_delta_sec, int se
     ++offset;
     new_point.beam_id = (int)getFloatFromByteArray(buffer.data(), bufpos + offset * float_offset);
     ++offset;
-    new_point.line_id = (int)getFloatFromByteArray(buffer.data(), bufpos + offset * float_offset);
+    new_point.line_id = 63 - (int)getFloatFromByteArray(buffer.data(), bufpos + offset * float_offset); // flip order to be consistent with learned models
     ++offset;
     new_point.face_id = (int)getFloatFromByteArray(buffer.data(), bufpos + offset * float_offset);
     new_point.sensor_id = sensor_id;
@@ -66,7 +90,7 @@ Pointcloud readPointCloud(const std::string& path, double time_delta_sec, int se
       continue;
 
     // include if within start and end time
-    if (new_point.timestamp >= start_time && new_point.timestamp <= end_time)
+    if (new_point.timestamp > start_time && new_point.timestamp <= end_time)
       frame.push_back(new_point);
   }
 
@@ -256,7 +280,7 @@ std::vector<Eigen::MatrixXd> AevaHQSequence::nextGyro(const double& start_time, 
     std::vector<int> inds; inds.clear();
     for (int r = 0; r < gyro_data_[sensorid].rows(); ++r) {
       double meas_time = gyro_data_[sensorid](r, 0);
-      if (meas_time >= start_time && meas_time < end_time)
+      if (meas_time > start_time && meas_time <= end_time)
         inds.push_back(r);
     } // end for r
 

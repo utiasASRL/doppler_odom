@@ -18,7 +18,7 @@ class DopplerFilter : public Odometry {
 
   void solveFrame(const Pointcloud& frame, const std::vector<Eigen::MatrixXd>& gyro) override;
   Pointcloud preprocessFrame(Pointcloud &frame, double start_time, double end_time) override;
-  Pointcloud ransacFrame(const Pointcloud &frame) override;
+  Pointcloud ransacFrame(const Pointcloud &frame, const std::vector<Eigen::MatrixXd>& gyro) override;
   Eigen::Matrix4d integrateForPose() override;
   
   std::vector<double> getLatestFrameTimes() override {
@@ -29,7 +29,6 @@ class DopplerFilter : public Odometry {
   }
 
  private:
-  void initializeTimestamp(int index_frame, const std::vector<Pointcloud>& const_frame);
   const Options options_;
 
   // precompute WNOA prior
