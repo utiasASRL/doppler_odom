@@ -10,7 +10,7 @@ namespace doppler_odom {
 
 namespace {
 
-Pointcloud readPointCloud(const std::string &path, const double &time_delta_sec, double& start_time, double& end_time) {
+Pointcloud readPointCloud(const std::string &path, const double &time_delta_sec, const double& start_time, const double& end_time) {
   Pointcloud frame;
 
   // read bin file
@@ -43,28 +43,30 @@ Pointcloud readPointCloud(const std::string &path, const double &time_delta_sec,
     ++offset;
     new_point.radial_velocity = getFloatFromByteArray(buffer.data(), bufpos + offset * float_offset);
     ++offset;
-    new_point.timestamp = getFloatFromByteArray(buffer.data(), bufpos + offset * float_offset);
+    new_point.timestamp = getFloatFromByteArray(buffer.data(), bufpos + offset * float_offset) + time_delta_sec;
 
     ++offset;
     new_point.beam_id = (int)getFloatFromByteArray(buffer.data(), bufpos + offset * float_offset);
 
-    if (new_point.timestamp < frame_first_timestamp) {
-      frame_first_timestamp = new_point.timestamp;
-    }
+    // if (new_point.timestamp < frame_first_timestamp) {
+    //   frame_first_timestamp = new_point.timestamp;
+    // }
 
-    if (new_point.timestamp > frame_last_timestamp) {
-      frame_last_timestamp = new_point.timestamp;
-    }
+    // if (new_point.timestamp > frame_last_timestamp) {
+    //   frame_last_timestamp = new_point.timestamp;
+    // }
 
-    frame.push_back(new_point);
+    // include if within start and end time
+    if (new_point.timestamp > start_time && new_point.timestamp <= end_time)
+      frame.push_back(new_point);
   }
   frame.shrink_to_fit();
-  for (int i(0); i < (int)frame.size(); i++) {
-    frame[i].timestamp += time_delta_sec;
-  }
+  // for (int i(0); i < (int)frame.size(); i++) {
+  //   frame[i].timestamp += time_delta_sec;
+  // }
 
-  start_time = frame_first_timestamp + time_delta_sec;
-  end_time = frame_last_timestamp + time_delta_sec;
+  // start_time = frame_first_timestamp + time_delta_sec;
+  // end_time = frame_last_timestamp + time_delta_sec;
   return frame;
 }
 
@@ -128,6 +130,16 @@ Pointcloud BoreasAevaSequence::next(double& start_time, double& end_time) {
   auto filename = filenames_.at(curr_frame);
   int64_t time_delta_micro = std::stoll(filename.substr(0, filename.find("."))) - initial_timestamp_micro_;
   double time_delta_sec = static_cast<double>(time_delta_micro) / 1e6;
+
+  // Note: we peak into future data for the end timestamp for evaluation convenience. An online implementation
+  // would need different logic, i.e., use the last timestamp of the pointcloud
+  start_time = time_delta_sec;
+  if (curr_frame + 1 < filenames_.size()) {
+    auto filename_next = filenames_.at(curr_frame + 1);
+    end_time = static_cast<double>(std::stoll(filename_next.substr(0, filename_next.find("."))) - initial_timestamp_micro_) / 1e6;
+  }
+  else
+    end_time = start_time + 0.1;
 
   // load point cloud (this dataset only has 1 sensor)
   auto frame = readPointCloud(dir_path_ + "/" + filename, time_delta_sec, start_time, end_time);

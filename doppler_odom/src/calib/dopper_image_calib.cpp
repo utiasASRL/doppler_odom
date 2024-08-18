@@ -217,8 +217,8 @@ double DopplerImageCalib::computeModel(const Eigen::VectorXd& feat, const Eigen:
   }
   
   double output = 0;
-  // Eigen::VectorXd featpow = feat;
-  Eigen::VectorXd featpow = Eigen::VectorXd::Ones(feat.size()); // TODO: bug in training code that starts with feat^0
+  Eigen::VectorXd featpow = feat;
+  // Eigen::VectorXd featpow = Eigen::VectorXd::Ones(feat.size()); // TODO: bug in training code that starts with feat^0
   for (int i = 0; i < polyorder; ++i) {
     output += featpow.dot(weights.segment(i * feat.size(), feat.size()));
     featpow.array() *= feat.array();
