@@ -163,16 +163,24 @@ AevaHQSequence::AevaHQSequence(const AevaHQDataset::Options& options) : options_
     }()
   );
 
+  // determine min length to truncate end
+  int len = last_frame_[0] - init_frame_[0];
+  for (int i = 1; i < 4; ++i) {
+    if (last_frame_[i] - init_frame_[i] < len)
+      len = last_frame_[i] - init_frame_[i];
+  }
+
   // initialize curr_frame_ for each sensor and make sure lengths are the same 
   // if options_.init_frame != 0, we need to offset curr_frame_ for each sensor.
-  int len = last_frame_[0] - init_frame_[0];
-  curr_frame_[0] = init_frame_[0] + std::max((int)0, options_.init_frame);
-  for (int i = 1; i < 4; ++i) {
+  // int len = last_frame_[0] - init_frame_[0];
+  // curr_frame_[0] = init_frame_[0] + std::max((int)0, options_.init_frame);
+  for (int i = 0; i < 4; ++i) {
     curr_frame_[i] = init_frame_[i] + std::max((int)0, options_.init_frame);
-    if (len != last_frame_[i] - init_frame_[i])
-      throw std::runtime_error("Sensor " + std::to_string(i) 
-        + " has " + std::to_string(last_frame_[i] - init_frame_[i]) 
-        + " frames, instead of " + std::to_string(len) + " (Sensor 0)");
+    //if (len != last_frame_[i] - init_frame_[i])
+      // throw std::runtime_error("Sensor " + std::to_string(i) 
+      // + " has " + std::to_string(last_frame_[i] - init_frame_[i]) 
+      // + " frames, instead of " + std::to_string(len) + " (Sensor 0)");
+      last_frame_[i] = init_frame_[i] + len;
   }
 
   // set initial time to keep floats small
