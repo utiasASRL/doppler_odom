@@ -203,6 +203,8 @@ void DopplerImageCalib::buildFeatVec(Eigen::VectorXd& feat, const Point3D& point
     }
     else if (feat_string[i] == "rv_var5") // TODO: handle variable
       val = scaleValue(std::min(1.0 / sqrt(dop_pseudovar), 200.0), 0.0, 200.0);
+    else if (feat_string[i] == "rv_stddev5") // TODO: handle variable
+      val = scaleValue(sqrt(dop_pseudovar), 0.0, 1.0);
     else
       throw std::runtime_error("[DopplerImageCalib::buildFeatVec] Unknown feature!");
     feat(i) = val;  // set value
